@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Search, Plus, Phone, MessageCircle, X, Pencil, Trash2,
@@ -165,6 +165,76 @@ const emptyForm: Cliente = {
   dia_vencimento: null, status: 'ATIVO', observacoes: '', proximo_contato: null,
   data_nascimento: null, indicado_por: null, ultimo_contato: null,
 };
+
+/* ---------------------------------- motion helpers ---------------------------------- */
+
+function useCountUp(target: number, duration = 700) {
+  const [value, setValue] = useState(target);
+  const fromRef = useRef(target);
+  const firstRun = useRef(true);
+
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; fromRef.current = target; setValue(target); return; }
+    const from = fromRef.current;
+    const start = performance.now();
+    let raf: number;
+    function tick(now: number) {
+      const progress = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(from + (target - from) * eased);
+      if (progress < 1) raf = requestAnimationFrame(tick);
+      else fromRef.current = target;
+    }
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
+
+  return value;
+}
+
+function ripple(e: React.MouseEvent<HTMLElement>) {
+  const target = e.currentTarget;
+  const rect = target.getBoundingClientRect();
+  const size = Math.max(rect.width, rect.height) * 1.4;
+  const span = document.createElement('span');
+  span.className = 'ripple-effect';
+  span.style.width = `${size}px`;
+  span.style.height = `${size}px`;
+  span.style.left = `${e.clientX - rect.left - size / 2}px`;
+  span.style.top = `${e.clientY - rect.top - size / 2}px`;
+  target.appendChild(span);
+  setTimeout(() => span.remove(), 650);
+}
+
+function Confetti() {
+  const pieces = useMemo(() => Array.from({ length: 46 }, (_, i) => ({
+    id: i,
+    left: Math.random() * 100,
+    delay: Math.random() * 0.5,
+    duration: 2.4 + Math.random() * 1.4,
+    color: ['#F2600C', '#FFC93C', '#0F3D8C', '#3F6B4A', '#FFB238'][i % 5],
+    width: 6 + Math.random() * 5,
+  })), []);
+  return (
+    <div className="confetti-overlay" aria-hidden="true">
+      {pieces.map(p => (
+        <span
+          key={p.id}
+          className="confetti-piece"
+          style={{
+            left: `${p.left}%`,
+            width: p.width,
+            height: p.width * 1.7,
+            background: p.color,
+            animationDelay: `${p.delay}s`,
+            animationDuration: `${p.duration}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 /* ---------------------------------- UI bits ---------------------------------- */
 
@@ -597,6 +667,11 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     return { total, atrasados, vips, acaoHoje: acaoDoDia.length };
   }, [enriched, acaoDoDia]);
 
+  const statTotalAnim = useCountUp(stats.total);
+  const statAcaoHojeAnim = useCountUp(stats.acaoHoje);
+  const statAtrasadosAnim = useCountUp(stats.atrasados);
+  const statVipsAnim = useCountUp(stats.vips);
+
   const vendasMes = useMemo(() => {
     const now = new Date();
     return enriched.reduce((sum, c) => {
@@ -658,6 +733,20 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     const pct = metaMensal && metaMensal > 0 ? Math.min(100, (vendasMes / metaMensal) * 100) : 0;
     return { diasRestantes, valorRestante, metaDiaria, pct };
   }, [metaMensal, vendasMes]);
+
+  const metaPctAnim = useCountUp(metaCalc.pct);
+
+  const [showConfetti, setShowConfetti] = useState(false);
+  const prevMetaPctRef = useRef(0);
+  useEffect(() => {
+    if (metaCalc.pct >= 100 && prevMetaPctRef.current < 100) {
+      setShowConfetti(true);
+      const t = setTimeout(() => setShowConfetti(false), 3200);
+      prevMetaPctRef.current = metaCalc.pct;
+      return () => clearTimeout(t);
+    }
+    prevMetaPctRef.current = metaCalc.pct;
+  }, [metaCalc.pct]);
 
   const avgTicket = useMemo(() => {
     const valores = clients.map(c => c.valor_total).filter((v): v is number => typeof v === 'number' && v > 0);
@@ -741,6 +830,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
 
   return (
     <div className="carteira-app">
+      {showConfetti && <Confetti />}
       {loading ? (
         <div className="loading-msg">carregando carteira...</div>
       ) : (
@@ -789,7 +879,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
             {metaMensal ? (
               <>
                 <div className="meta-pct-big mono">
-                  {metaCalc.pct >= 100 ? '🏆 Meta batida!' : `${metaCalc.pct.toFixed(0)}%`}
+                  {metaCalc.pct >= 100 ? '🏆 Meta batida!' : `${Math.round(metaPctAnim)}%`}
                 </div>
                 <div className="meta-track-big">
                   <div className="meta-fill-big" style={{ width: `${metaCalc.pct}%` }} />
@@ -904,10 +994,10 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
           </div>
 
           <div className="stats-row">
-            <div className="stat-card"><div className="stat-num mono">{stats.total}</div><div className="stat-label"><Users size={12} /> Total</div></div>
-            <div className="stat-card warn"><div className="stat-num mono">{stats.acaoHoje}</div><div className="stat-label"><Zap size={12} /> Ação hoje</div></div>
-            <div className="stat-card danger"><div className="stat-num mono">{stats.atrasados}</div><div className="stat-label"><AlertTriangle size={12} /> Atrasados</div></div>
-            <div className="stat-card gold"><div className="stat-num mono">{stats.vips}</div><div className="stat-label"><Star size={12} /> VIPs</div></div>
+            <div className="stat-card"><div className="stat-num mono">{Math.round(statTotalAnim)}</div><div className="stat-label"><Users size={12} /> Total</div></div>
+            <div className="stat-card warn"><div className="stat-num mono">{Math.round(statAcaoHojeAnim)}</div><div className="stat-label"><Zap size={12} /> Ação hoje</div></div>
+            <div className="stat-card danger"><div className="stat-num mono">{Math.round(statAtrasadosAnim)}</div><div className="stat-label"><AlertTriangle size={12} /> Atrasados</div></div>
+            <div className="stat-card gold"><div className="stat-num mono">{Math.round(statVipsAnim)}</div><div className="stat-label"><Star size={12} /> VIPs</div></div>
           </div>
 
           {acaoDoDia.length > 0 && (
@@ -973,7 +1063,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
             </div>
           )}
 
-          <button className="fab" onClick={openAdd}><Plus size={18} /> Novo cliente</button>
+          <button className="fab ripple-host" onClick={(e) => { ripple(e); openAdd(); }}><Plus size={18} /> Novo cliente</button>
 
           {formOpen && (
             <div className="modal-overlay" onClick={() => setFormOpen(false)}>
@@ -1091,7 +1181,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
 
                 <div className="modal-actions">
                   <button type="button" className="btn ghost" onClick={() => setFormOpen(false)}>Cancelar</button>
-                  <button type="submit" className="btn primary">Salvar</button>
+                  <button type="submit" className="btn primary ripple-host" onClick={ripple}>Salvar</button>
                 </div>
               </form>
             </div>

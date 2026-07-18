@@ -4,6 +4,20 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
+function ripple(e: React.MouseEvent<HTMLElement>) {
+  const target = e.currentTarget;
+  const rect = target.getBoundingClientRect();
+  const size = Math.max(rect.width, rect.height) * 1.4;
+  const span = document.createElement('span');
+  span.className = 'ripple-effect';
+  span.style.width = `${size}px`;
+  span.style.height = `${size}px`;
+  span.style.left = `${e.clientX - rect.left - size / 2}px`;
+  span.style.top = `${e.clientY - rect.top - size / 2}px`;
+  target.appendChild(span);
+  setTimeout(() => span.remove(), 650);
+}
+
 export default function LoginForm() {
   const router = useRouter();
   const supabase = createClient();
@@ -53,7 +67,7 @@ export default function LoginForm() {
               required
             />
           </div>
-          <button className="auth-btn" type="submit" disabled={loading}>
+          <button className="auth-btn ripple-host" type="submit" disabled={loading} onClick={ripple}>
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
