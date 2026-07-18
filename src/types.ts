@@ -42,9 +42,9 @@ export interface Interacao {
 
 export const STATUS: Record<StatusKey, { label: string; color: string }> = {
   ATIVO: { label: 'Ativo', color: '#3F6B4A' },
-  ATRASADO: { label: 'Atrasado', color: '#A63D2C' },
-  QUITADO: { label: 'Quitado', color: '#3C5A73' },
-  NEGOCIANDO: { label: 'Negociando', color: '#B8862B' },
+  ATRASADO: { label: 'Atrasado', color: '#C23B1E' },
+  QUITADO: { label: 'Quitado', color: '#0F3D8C' },
+  NEGOCIANDO: { label: 'Negociando', color: '#F2600C' },
 };
 
 export const STATUS_ORDER: StatusKey[] = ['ATIVO', 'ATRASADO', 'NEGOCIANDO', 'QUITADO'];
