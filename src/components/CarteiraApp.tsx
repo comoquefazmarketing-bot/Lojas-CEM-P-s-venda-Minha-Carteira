@@ -65,27 +65,27 @@ const SCRIPTS: Record<ScriptKey, { label: string; icon: typeof MessageCircle; bu
   posvenda: {
     label: 'Pós-venda (satisfação)',
     icon: MessageCircle,
-    build: (nome, produto) => `Oi ${firstName(nome)}! Aqui é da Lojas CEM. Passando pra saber se está tudo certo com ${produto || 'sua compra'} — qualquer coisa, pode me chamar! 😊`,
+    build: (nome, produto) => `Oi ${firstName(nome)}! Aqui é o Felipe, das Lojas CEM. Passando pra saber se está tudo certo com ${produto || 'sua compra'} — qualquer coisa, pode me chamar! 😊`,
   },
   carne: {
     label: 'Carnê acabando (recompra)',
     icon: Repeat,
-    build: (nome) => `Oi ${firstName(nome)}! Vi aqui que seu carnê tá quase no fim 🎉 Isso significa que seu crédito na loja já libera de novo. Quer que eu separe umas novidades pra você dar uma olhada?`,
+    build: (nome) => `Oi ${firstName(nome)}! Aqui é o Felipe, das Lojas CEM. Vi aqui que seu carnê tá quase no fim 🎉 Isso significa que seu crédito na loja já libera de novo. Quer que eu separe umas novidades pra você dar uma olhada?`,
   },
   reativacao: {
     label: 'Reativação (sumiu)',
     icon: Zap,
-    build: (nome) => `Oi ${firstName(nome)}, tudo bem? Faz um tempo que a gente não troca uma ideia! Tô com umas condições boas na loja essa semana, passa aqui ou me chama que te conto 😉`,
+    build: (nome) => `Oi ${firstName(nome)}, tudo bem? Aqui é o Felipe, das Lojas CEM. Faz um tempo que a gente não troca uma ideia! Tô com umas condições boas na loja essa semana, passa aqui ou me chama que te conto 😉`,
   },
   aniversario: {
     label: 'Aniversário',
     icon: Gift,
-    build: (nome) => `Parabéns, ${firstName(nome)}! 🎉🎂 Toda a equipe das Lojas CEM te deseja um ano incrível. E já separei uma condição especial de aniversário pra você, se quiser dar uma olhada!`,
+    build: (nome) => `Parabéns, ${firstName(nome)}! 🎉🎂 Aqui é o Felipe, das Lojas CEM, e toda a equipe te deseja um ano incrível. E já separei uma condição especial de aniversário pra você, se quiser dar uma olhada!`,
   },
   indicacao: {
     label: 'Pedido de indicação',
     icon: Handshake,
-    build: (nome) => `Oi ${firstName(nome)}! Fico muito feliz que você é cliente da gente 🙏 Se você conhecer alguém que tá precisando de algo pra casa, me indica? Cuido super bem de quem você mandar!`,
+    build: (nome) => `Oi ${firstName(nome)}! Aqui é o Felipe, das Lojas CEM. Fico muito feliz que você é cliente da gente 🙏 Se você conhecer alguém que tá precisando de algo pra casa, me indica? Cuido super bem de quem você mandar!`,
   },
 };
 
