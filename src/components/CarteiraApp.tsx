@@ -95,28 +95,36 @@ function waLinkWithText(telefone: string, text: string) {
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
 }
 
-/* ------------------------------- comissão (estimativa) ------------------------------- */
+/* ------------------------------- comissão & categorias (estimativa) ------------------------------- */
 // Taxas informadas: móveis 2,5% e TV 0,5%. Pra produtos que não se encaixam em nenhuma das
 // duas categorias, usamos uma taxa intermediária aproximada (média das duas) só pra dar uma
 // perspectiva — não é o valor oficial.
-const COMISSAO_GRUPOS: { taxa: number; palavras: string[] }[] = [
-  { taxa: 0.025, palavras: ['sofa', 'cama', 'colchao', 'guarda-roupa', 'guarda roupa', 'guardaroupa', 'estante', 'mesa', 'cadeira', 'rack', 'armario', 'painel', 'poltrona', 'comoda', 'escrivaninha', 'roupeiro'] },
-  { taxa: 0.005, palavras: ['tv', 'televisao', 'smart tv'] },
+export type CategoriaProduto = 'MOVEIS' | 'TV' | 'OUTROS';
+
+const CATEGORIA_LABELS: Record<CategoriaProduto, string> = { MOVEIS: 'Móveis', TV: 'TV', OUTROS: 'Outros produtos' };
+const CATEGORIA_TAXA: Record<CategoriaProduto, number> = { MOVEIS: 0.025, TV: 0.005, OUTROS: 0.015 };
+const CATEGORIA_ORDEM: CategoriaProduto[] = ['MOVEIS', 'TV', 'OUTROS'];
+const CATEGORIA_PALAVRAS: { categoria: CategoriaProduto; palavras: string[] }[] = [
+  { categoria: 'MOVEIS', palavras: ['sofa', 'cama', 'colchao', 'guarda-roupa', 'guarda roupa', 'guardaroupa', 'estante', 'mesa', 'cadeira', 'rack', 'armario', 'painel', 'poltrona', 'comoda', 'escrivaninha', 'roupeiro'] },
+  { categoria: 'TV', palavras: ['tv', 'televisao', 'smart tv'] },
 ];
-const COMISSAO_TAXA_PADRAO = 0.015;
 const SALARIO_MINIMO_GARANTIDO = 2500;
 
 function normalizeText(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
-function taxaComissao(produto: string | null): number {
-  if (!produto) return COMISSAO_TAXA_PADRAO;
+function categoriaProduto(produto: string | null): CategoriaProduto {
+  if (!produto) return 'OUTROS';
   const texto = normalizeText(produto);
-  for (const grupo of COMISSAO_GRUPOS) {
-    if (grupo.palavras.some(p => texto.includes(normalizeText(p)))) return grupo.taxa;
+  for (const grupo of CATEGORIA_PALAVRAS) {
+    if (grupo.palavras.some(p => texto.includes(normalizeText(p)))) return grupo.categoria;
   }
-  return COMISSAO_TAXA_PADRAO;
+  return 'OUTROS';
+}
+
+function taxaComissao(produto: string | null): number {
+  return CATEGORIA_TAXA[categoriaProduto(produto)];
 }
 
 /* ------------------------------- tipos derivados ------------------------------- */
@@ -307,6 +315,9 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [oportunidadesExcluidas, setOportunidadesExcluidas] = useState<Set<string>>(new Set());
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
   const [novaNota, setNovaNota] = useState('');
+  const [metasCategoria, setMetasCategoria] = useState<Record<CategoriaProduto, number | null>>({ MOVEIS: null, TV: null, OUTROS: null });
+  const [editingCategoria, setEditingCategoria] = useState<CategoriaProduto | null>(null);
+  const [categoriaInput, setCategoriaInput] = useState('');
 
   const loadClients = useCallback(async () => {
     setLoading(true);
@@ -317,8 +328,11 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   }, [supabase]);
 
   const loadConfig = useCallback(async () => {
-    const { data } = await supabase.from('configuracoes').select('meta_mensal').maybeSingle();
-    if (data) setMetaMensal(data.meta_mensal);
+    const { data } = await supabase.from('configuracoes').select('meta_mensal, meta_moveis, meta_tv, meta_outros').maybeSingle();
+    if (data) {
+      setMetaMensal(data.meta_mensal);
+      setMetasCategoria({ MOVEIS: data.meta_moveis, TV: data.meta_tv, OUTROS: data.meta_outros });
+    }
   }, [supabase]);
 
   useEffect(() => { loadClients(); loadConfig(); }, [loadClients, loadConfig]);
@@ -418,6 +432,20 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     const { error } = await supabase
       .from('configuracoes')
       .upsert({ user_id: user.id, meta_mensal: val }, { onConflict: 'user_id' });
+    if (error) showToast('Não consegui salvar a meta');
+  }
+
+  async function handleSaveMetaCategoria(cat: CategoriaProduto) {
+    const val = parseFloat(categoriaInput.replace(',', '.'));
+    setEditingCategoria(null);
+    if (isNaN(val)) return;
+    setMetasCategoria(prev => ({ ...prev, [cat]: val }));
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { showToast('Não consegui salvar a meta'); return; }
+    const coluna = cat === 'MOVEIS' ? 'meta_moveis' : cat === 'TV' ? 'meta_tv' : 'meta_outros';
+    const { error } = await supabase
+      .from('configuracoes')
+      .upsert({ user_id: user.id, [coluna]: val }, { onConflict: 'user_id' });
     if (error) showToast('Não consegui salvar a meta');
   }
 
@@ -537,6 +565,19 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
       }
       return sum;
     }, 0);
+  }, [enriched]);
+
+  const vendasPorCategoria = useMemo(() => {
+    const now = new Date();
+    const totais: Record<CategoriaProduto, number> = { MOVEIS: 0, TV: 0, OUTROS: 0 };
+    enriched.forEach(c => {
+      if (!c.data_compra || !c.valor_total) return;
+      const d = new Date(c.data_compra);
+      if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
+        totais[categoriaProduto(c.produto)] += c.valor_total;
+      }
+    });
+    return totais;
   }, [enriched]);
 
   const metaCalc = useMemo(() => {
@@ -707,6 +748,50 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                   <div className="piso-numbers mono">
                     {formatBRL(comissaoMes)} de {formatBRL(SALARIO_MINIMO_GARANTIDO)} · {Math.min(100, (comissaoMes / SALARIO_MINIMO_GARANTIDO) * 100).toFixed(0)}%
                   </div>
+                </div>
+
+                <div className="categorias-box">
+                  <div className="categorias-title">Metas por categoria</div>
+                  {CATEGORIA_ORDEM.map(cat => {
+                    const meta = metasCategoria[cat];
+                    const vendido = vendasPorCategoria[cat];
+                    const pct = meta ? Math.min(100, (vendido / meta) * 100) : 0;
+                    return (
+                      <div key={cat} className="categoria-row">
+                        <div className="categoria-row-top">
+                          <span className="categoria-nome">{CATEGORIA_LABELS[cat]}</span>
+                          {editingCategoria === cat ? (
+                            <input
+                              autoFocus
+                              className="meta-input categoria-input"
+                              value={categoriaInput}
+                              onChange={e => setCategoriaInput(e.target.value)}
+                              onBlur={() => handleSaveMetaCategoria(cat)}
+                              onKeyDown={e => e.key === 'Enter' && handleSaveMetaCategoria(cat)}
+                              placeholder="0,00"
+                            />
+                          ) : (
+                            <button
+                              className="meta-set-btn"
+                              onClick={() => { setCategoriaInput(String(meta ?? '')); setEditingCategoria(cat); }}
+                            >
+                              {meta ? 'Editar' : 'Definir'}
+                            </button>
+                          )}
+                        </div>
+                        {meta ? (
+                          <>
+                            <div className="categoria-track">
+                              <div className="categoria-fill" style={{ width: `${pct}%` }} />
+                            </div>
+                            <div className="categoria-numbers mono">{formatBRL(vendido)} de {formatBRL(meta)} · {pct.toFixed(0)}%</div>
+                          </>
+                        ) : (
+                          <div className="categoria-empty">{formatBRL(vendido)} vendidos esse mês · sem meta definida</div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {oportunidadesMeta.length > 0 && metaCalc.pct < 100 && (

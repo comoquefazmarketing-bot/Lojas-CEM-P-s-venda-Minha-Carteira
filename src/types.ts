@@ -26,6 +26,9 @@ export interface Cliente {
 export interface Configuracoes {
   user_id: string;
   meta_mensal: number | null;
+  meta_moveis: number | null;
+  meta_tv: number | null;
+  meta_outros: number | null;
 }
 
 export interface Interacao {

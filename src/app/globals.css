@@ -157,6 +157,18 @@ html, body {
 .piso-fill { height: 100%; background: linear-gradient(90deg, #6fb3d9, #4a90c2); border-radius: 999px; transition: width .4s ease; }
 .piso-numbers { font-size: 11.5px; color: rgba(250,246,236,0.85); margin-top: 6px; }
 
+.categorias-box { margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 12px; }
+.categorias-title { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(250,246,236,0.7); margin-bottom: 10px; }
+.categoria-row { margin-bottom: 12px; }
+.categoria-row:last-child { margin-bottom: 0; }
+.categoria-row-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; gap: 8px; }
+.categoria-nome { font-size: 12.5px; font-weight: 600; color: var(--paper); }
+.categoria-input { width: 90px; }
+.categoria-track { position: relative; height: 6px; background: rgba(255,255,255,0.12); border-radius: 999px; overflow: hidden; margin-bottom: 4px; }
+.categoria-fill { height: 100%; background: linear-gradient(90deg, #d9a94a, var(--gold)); border-radius: 999px; transition: width .4s ease; }
+.categoria-numbers { font-size: 11px; color: rgba(250,246,236,0.8); }
+.categoria-empty { font-size: 11px; color: rgba(250,246,236,0.55); font-style: italic; }
+
 .oportunidades-box { margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 12px; }
 .oportunidades-title { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(250,246,236,0.7); margin-bottom: 8px; }
 .oportunidades-soma { text-transform: none; color: var(--gold); font-weight: 600; letter-spacing: normal; }
