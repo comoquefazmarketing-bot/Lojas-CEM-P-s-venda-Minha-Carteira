@@ -6,7 +6,7 @@ import {
   Search, Plus, Phone, MessageCircle, X, Pencil, Trash2,
   Clock, Users, AlertTriangle, Download, LogOut, Flame,
   Snowflake, Star, Target, Check, Gift, Repeat, Handshake,
-  ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp,
+  ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO } from '@/types';
@@ -93,6 +93,29 @@ function waLinkWithText(telefone: string, text: string) {
   const digits = onlyDigits(telefone);
   const phone = digits.length > 0 && digits.length <= 11 ? `55${digits}` : digits;
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+}
+
+/* ------------------------------- comissão (estimativa) ------------------------------- */
+// Taxas informadas: móveis 2,5% e TV 0,5%. Pra produtos que não se encaixam em nenhuma das
+// duas categorias, usamos uma taxa intermediária aproximada (média das duas) só pra dar uma
+// perspectiva — não é o valor oficial.
+const COMISSAO_GRUPOS: { taxa: number; palavras: string[] }[] = [
+  { taxa: 0.025, palavras: ['sofa', 'cama', 'colchao', 'guarda-roupa', 'guarda roupa', 'guardaroupa', 'estante', 'mesa', 'cadeira', 'rack', 'armario', 'painel', 'poltrona', 'comoda', 'escrivaninha', 'roupeiro'] },
+  { taxa: 0.005, palavras: ['tv', 'televisao', 'smart tv'] },
+];
+const COMISSAO_TAXA_PADRAO = 0.015;
+
+function normalizeText(s: string) {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+function taxaComissao(produto: string | null): number {
+  if (!produto) return COMISSAO_TAXA_PADRAO;
+  const texto = normalizeText(produto);
+  for (const grupo of COMISSAO_GRUPOS) {
+    if (grupo.palavras.some(p => texto.includes(normalizeText(p)))) return grupo.taxa;
+  }
+  return COMISSAO_TAXA_PADRAO;
 }
 
 /* ------------------------------- tipos derivados ------------------------------- */
@@ -471,6 +494,18 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     }, 0);
   }, [enriched]);
 
+  const comissaoMes = useMemo(() => {
+    const now = new Date();
+    return enriched.reduce((sum, c) => {
+      if (!c.data_compra || !c.valor_total) return sum;
+      const d = new Date(c.data_compra);
+      if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
+        return sum + c.valor_total * taxaComissao(c.produto);
+      }
+      return sum;
+    }, 0);
+  }, [enriched]);
+
   const metaCalc = useMemo(() => {
     const now = new Date();
     const diasNoMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -624,6 +659,10 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                   <div className="meta-mini">
                     <TrendingUp size={14} />
                     <div><div className="meta-mini-num mono">{metaCalc.valorRestante === 0 ? 'R$ 0' : formatBRL(metaCalc.metaDiaria)}</div><div className="meta-mini-label">vender por dia</div></div>
+                  </div>
+                  <div className="meta-mini" title="Estimativa aproximada: móveis 2,5%, TV 0,5%, demais produtos numa taxa média aproximada">
+                    <Coins size={14} />
+                    <div><div className="meta-mini-num mono">{formatBRL(comissaoMes)}</div><div className="meta-mini-label">comissão estimada</div></div>
                   </div>
                 </div>
 
