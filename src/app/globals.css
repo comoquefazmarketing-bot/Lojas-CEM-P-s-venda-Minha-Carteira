@@ -40,6 +40,11 @@ html, body {
   border-radius: 14px;
   padding: 32px 28px;
 }
+.auth-logo {
+  height: 48px;
+  width: auto;
+  margin-bottom: 14px;
+}
 .auth-eyebrow {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 11px;
@@ -94,6 +99,7 @@ html, body {
 }
 
 .top-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; gap:12px; flex-wrap: wrap; }
+.header-logo { height: 36px; width: auto; margin-bottom: 8px; }
 .eyebrow { font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:2px; color: var(--gold); text-transform: uppercase; margin-bottom:4px; }
 .title { font-family:'Fraunces', serif; font-weight:700; font-size:28px; margin:0; line-height:1.1; }
 .subtitle { color: var(--ink-soft); font-size:13px; margin-top:4px; }

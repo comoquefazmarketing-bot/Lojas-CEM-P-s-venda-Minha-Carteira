@@ -29,6 +29,7 @@ export default function LoginForm() {
   return (
     <div className="auth-shell">
       <div className="auth-card">
+        <img src="/logo-lojas-cem.png" alt="Lojas CEM" className="auth-logo" />
         <div className="auth-eyebrow">Lojas CEM · Pós-venda</div>
         <h1 className="auth-title">Minha Carteira</h1>
         {error && <div className="auth-error">{error}</div>}

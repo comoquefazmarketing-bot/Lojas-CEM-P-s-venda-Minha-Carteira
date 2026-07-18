@@ -548,6 +548,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
         <>
           <div className="top-header">
             <div>
+              <img src="/logo-lojas-cem.png" alt="Lojas CEM" className="header-logo" />
               <div className="eyebrow">Lojas CEM · Pós-venda</div>
               <h1 className="title">Minha Carteira</h1>
               <div className="subtitle">{userEmail} · {stats.total} cliente{stats.total !== 1 ? 's' : ''}</div>
