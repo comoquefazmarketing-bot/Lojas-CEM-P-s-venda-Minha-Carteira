@@ -224,10 +224,12 @@ function ClienteCard({
       </div>
 
       {hasTermino && (
-        <div className="progress-track">
-          <div className="progress-fill" style={{ width: `${progresso}%`, background: s.color }} />
-          <span className="progress-label">~{parcelasEstimadas}/{c.numero_parcelas} parcelas (estimado)</span>
-        </div>
+        <>
+          <div className="progress-track">
+            <div className="progress-fill" style={{ width: `${progresso}%`, background: s.color }} />
+          </div>
+          <div className="progress-label">~{parcelasEstimadas}/{c.numero_parcelas} parcelas (estimado)</div>
+        </>
       )}
 
       {contatoPendente && (
