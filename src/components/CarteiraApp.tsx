@@ -104,6 +104,7 @@ const COMISSAO_GRUPOS: { taxa: number; palavras: string[] }[] = [
   { taxa: 0.005, palavras: ['tv', 'televisao', 'smart tv'] },
 ];
 const COMISSAO_TAXA_PADRAO = 0.015;
+const SALARIO_MINIMO_GARANTIDO = 2500;
 
 function normalizeText(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -663,6 +664,16 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                   <div className="meta-mini" title="Estimativa aproximada: móveis 2,5%, TV 0,5%, demais produtos numa taxa média aproximada">
                     <Coins size={14} />
                     <div><div className="meta-mini-num mono">{formatBRL(comissaoMes)}</div><div className="meta-mini-label">comissão estimada</div></div>
+                  </div>
+                </div>
+
+                <div className="piso-box">
+                  <div className="piso-label">Comissão vs. piso garantido ({formatBRL(SALARIO_MINIMO_GARANTIDO)})</div>
+                  <div className="piso-track">
+                    <div className="piso-fill" style={{ width: `${Math.min(100, (comissaoMes / SALARIO_MINIMO_GARANTIDO) * 100)}%` }} />
+                  </div>
+                  <div className="piso-numbers mono">
+                    {formatBRL(comissaoMes)} de {formatBRL(SALARIO_MINIMO_GARANTIDO)} · {Math.min(100, (comissaoMes / SALARIO_MINIMO_GARANTIDO) * 100).toFixed(0)}%
                   </div>
                 </div>
 

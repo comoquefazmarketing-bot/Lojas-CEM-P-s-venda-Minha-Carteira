@@ -151,6 +151,12 @@ html, body {
 .meta-mini-num { color: var(--paper); font-size: 15px; font-weight: 600; line-height: 1.1; overflow-wrap: break-word; }
 .meta-mini-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px; }
 
+.piso-box { margin-top: 14px; }
+.piso-label { font-size: 11px; color: rgba(250,246,236,0.7); margin-bottom: 6px; }
+.piso-track { position: relative; height: 8px; background: rgba(255,255,255,0.12); border-radius: 999px; overflow: hidden; }
+.piso-fill { height: 100%; background: linear-gradient(90deg, #6fb3d9, #4a90c2); border-radius: 999px; transition: width .4s ease; }
+.piso-numbers { font-size: 11.5px; color: rgba(250,246,236,0.85); margin-top: 6px; }
+
 .oportunidades-box { margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 12px; }
 .oportunidades-title { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(250,246,236,0.7); margin-bottom: 8px; }
 .oportunidades-soma { text-transform: none; color: var(--gold); font-weight: 600; letter-spacing: normal; }
