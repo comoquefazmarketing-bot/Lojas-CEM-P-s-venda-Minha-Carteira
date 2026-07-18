@@ -9,7 +9,7 @@ import {
   ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO } from '@/types';
+import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao } from '@/types';
 
 /* ---------------------------------- utils ---------------------------------- */
 
@@ -305,6 +305,8 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [metaInput, setMetaInput] = useState('');
   const [acaoDoDiaOpen, setAcaoDoDiaOpen] = useState(true);
   const [oportunidadesExcluidas, setOportunidadesExcluidas] = useState<Set<string>>(new Set());
+  const [interacoes, setInteracoes] = useState<Interacao[]>([]);
+  const [novaNota, setNovaNota] = useState('');
 
   const loadClients = useCallback(async () => {
     setLoading(true);
@@ -323,8 +325,38 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 2400); }
 
-  function openAdd() { setForm({ ...emptyForm, id: '' }); setFormOpen(true); }
-  function openEdit(c: Cliente) { setForm(c); setFormOpen(true); }
+  async function loadInteracoes(clienteId: string) {
+    const { data } = await supabase
+      .from('interacoes')
+      .select('*')
+      .eq('cliente_id', clienteId)
+      .order('data', { ascending: false })
+      .order('criado_em', { ascending: false });
+    setInteracoes((data as Interacao[]) ?? []);
+  }
+
+  function openAdd() { setForm({ ...emptyForm, id: '' }); setInteracoes([]); setNovaNota(''); setFormOpen(true); }
+  function openEdit(c: Cliente) { setForm(c); setNovaNota(''); loadInteracoes(c.id); setFormOpen(true); }
+
+  async function handleAddInteracao() {
+    if (!novaNota.trim() || !form.id) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { showToast('Não consegui salvar'); return; }
+    const { error } = await supabase.from('interacoes').insert({
+      cliente_id: form.id, user_id: user.id, nota: novaNota.trim(), data: todayIso(),
+    });
+    if (error) { showToast('Não consegui salvar a anotação'); return; }
+    await supabase.from('clientes').update({ ultimo_contato: todayIso() }).eq('id', form.id);
+    setNovaNota('');
+    loadInteracoes(form.id);
+    loadClients();
+  }
+
+  async function handleDeleteInteracao(id: string) {
+    const { error } = await supabase.from('interacoes').delete().eq('id', id);
+    if (error) { showToast('Não consegui excluir'); return; }
+    setInteracoes(prev => prev.filter(i => i.id !== id));
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -861,6 +893,38 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                     <textarea {...field('observacoes')} placeholder="Preferências, combinados, detalhes da negociação..." />
                   </div>
                 </div>
+
+                {form.id && (
+                  <div className="historico-box">
+                    <div className="historico-title">Histórico de interações</div>
+                    <div className="historico-add">
+                      <textarea
+                        value={novaNota}
+                        onChange={e => setNovaNota(e.target.value)}
+                        placeholder="O que foi combinado/falado com o cliente..."
+                      />
+                      <button type="button" className="btn ghost historico-add-btn" onClick={handleAddInteracao}>
+                        <Plus size={14} /> Registrar
+                      </button>
+                    </div>
+                    {interacoes.length === 0 ? (
+                      <p className="historico-empty">Nenhuma interação registrada ainda.</p>
+                    ) : (
+                      <div className="historico-list">
+                        {interacoes.map(i => (
+                          <div key={i.id} className="historico-item">
+                            <div className="historico-item-top">
+                              <span className="historico-data mono">{formatDateBR(i.data)}</span>
+                              <button type="button" className="historico-del" onClick={() => handleDeleteInteracao(i.id)}><Trash2 size={12} /></button>
+                            </div>
+                            <div className="historico-nota">{i.nota}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="modal-actions">
                   <button type="button" className="btn ghost" onClick={() => setFormOpen(false)}>Cancelar</button>
                   <button type="submit" className="btn primary">Salvar</button>

@@ -28,6 +28,15 @@ export interface Configuracoes {
   meta_mensal: number | null;
 }
 
+export interface Interacao {
+  id: string;
+  cliente_id: string;
+  user_id?: string;
+  data: string;
+  nota: string;
+  criado_em?: string;
+}
+
 export const STATUS: Record<StatusKey, { label: string; color: string }> = {
   ATIVO: { label: 'Ativo', color: '#3F6B4A' },
   ATRASADO: { label: 'Atrasado', color: '#A63D2C' },

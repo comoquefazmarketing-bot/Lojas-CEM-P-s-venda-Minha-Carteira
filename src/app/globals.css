@@ -281,6 +281,23 @@ html, body {
 .form-field textarea { resize:vertical; min-height:60px; font-family:'IBM Plex Sans',sans-serif; }
 .termino-preview { grid-column:1/-1; font-size:12.5px; color:var(--gold); font-family:'IBM Plex Mono',monospace; background:#F5EDDB; padding:8px 10px; border-radius:8px; }
 
+.historico-box { margin-top:18px; padding-top:16px; border-top:1px solid var(--line); }
+.historico-title { font-size:12px; font-weight:600; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px; }
+.historico-add { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+.historico-add textarea {
+  border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-size:13.5px; font-family:'IBM Plex Sans',sans-serif;
+  background:white; color:var(--ink); resize:vertical; min-height:52px; width:100%;
+}
+.historico-add-btn { flex:0 0 auto; align-self:flex-end; display:flex; align-items:center; gap:5px; padding:8px 14px; }
+.historico-empty { font-size:12.5px; color:var(--ink-soft); font-style:italic; }
+.historico-list { display:flex; flex-direction:column; gap:8px; max-height:220px; overflow-y:auto; }
+.historico-item { background:var(--paper-alt); border-radius:8px; padding:8px 10px; }
+.historico-item-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:3px; }
+.historico-data { font-size:10.5px; color:var(--ink-soft); }
+.historico-del { background:none; border:none; color:var(--ink-soft); cursor:pointer; padding:2px; display:flex; }
+.historico-del:hover { color:var(--rust); }
+.historico-nota { font-size:12.5px; color:var(--ink); white-space:pre-wrap; word-break:break-word; }
+
 .modal-actions { display:flex; gap:10px; margin-top:18px; }
 .btn { flex:1; padding:11px; border-radius:9px; font-weight:600; font-size:14px; cursor:pointer; border:1px solid var(--line); font-family:'IBM Plex Sans',sans-serif; }
 .btn.primary { background:var(--ink); color:var(--paper); border-color:var(--ink); }
