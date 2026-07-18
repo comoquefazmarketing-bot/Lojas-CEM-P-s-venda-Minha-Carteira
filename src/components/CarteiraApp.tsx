@@ -6,7 +6,7 @@ import {
   Search, Plus, Phone, MessageCircle, X, Pencil, Trash2,
   Clock, Users, AlertTriangle, Download, LogOut, Flame,
   Snowflake, Star, Target, Check, Gift, Repeat, Handshake,
-  ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins,
+  ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins, ClipboardList,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao } from '@/types';
@@ -23,6 +23,11 @@ function formatDateBR(iso: string | null | undefined) {
   const [y, m, d] = iso.split('-');
   if (!y || !m || !d) return '—';
   return `${d}/${m}/${y}`;
+}
+function monthKey(iso: string) { return iso.slice(0, 7); }
+function monthLabel(key: string) {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 }
 function addMonths(iso: string, months: number) {
   const [y, m, d] = iso.split('-').map(Number);
@@ -318,6 +323,8 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [metasCategoria, setMetasCategoria] = useState<Record<CategoriaProduto, number | null>>({ MOVEIS: null, TV: null, OUTROS: null });
   const [editingCategoria, setEditingCategoria] = useState<CategoriaProduto | null>(null);
   const [categoriaInput, setCategoriaInput] = useState('');
+  const [relatorioOpen, setRelatorioOpen] = useState(false);
+  const [relatorioMes, setRelatorioMes] = useState(() => monthKey(todayIso()));
 
   const loadClients = useCallback(async () => {
     setLoading(true);
@@ -580,6 +587,23 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     return totais;
   }, [enriched]);
 
+  const mesesDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    set.add(monthKey(todayIso()));
+    clients.forEach(c => { if (c.data_compra) set.add(monthKey(c.data_compra)); });
+    return [...set].sort().reverse();
+  }, [clients]);
+
+  const relatorioData = useMemo(() => {
+    const doMes = enriched.filter(c => c.data_compra && monthKey(c.data_compra) === relatorioMes);
+    const vendas = doMes.reduce((sum, c) => sum + (c.valor_total || 0), 0);
+    const comissao = doMes.reduce((sum, c) => sum + (c.valor_total || 0) * taxaComissao(c.produto), 0);
+    const categorias: Record<CategoriaProduto, number> = { MOVEIS: 0, TV: 0, OUTROS: 0 };
+    doMes.forEach(c => { categorias[categoriaProduto(c.produto)] += c.valor_total || 0; });
+    const indicacoes = doMes.filter(c => c.indicado_por).length;
+    return { clientesNovos: doMes.length, vendas, comissao, categorias, indicacoes };
+  }, [enriched, relatorioMes]);
+
   const metaCalc = useMemo(() => {
     const now = new Date();
     const diasNoMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -680,6 +704,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
               <div className="subtitle">{userEmail} · {stats.total} cliente{stats.total !== 1 ? 's' : ''}</div>
             </div>
             <div className="header-actions">
+              <button className="backup-btn" onClick={() => setRelatorioOpen(true)}><ClipboardList size={13} /> Relatório</button>
               <button className="backup-btn" onClick={exportCsv}><Download size={13} /> CSV</button>
               <button className="logout-btn" onClick={handleLogout}><LogOut size={13} /> Sair</button>
             </div>
@@ -1026,6 +1051,56 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                 <div className="modal-actions">
                   <button className="btn ghost" onClick={() => setConfirmDelete(null)}>Cancelar</button>
                   <button className="btn danger" onClick={() => handleDelete(confirmDelete)}>Excluir</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {relatorioOpen && (
+            <div className="modal-overlay" onClick={() => setRelatorioOpen(false)}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                  <span className="modal-title">Relatório mensal</span>
+                  <button type="button" className="close-btn" onClick={() => setRelatorioOpen(false)}><X size={20} /></button>
+                </div>
+
+                <select className="sort-select relatorio-mes-select" value={relatorioMes} onChange={e => setRelatorioMes(e.target.value)}>
+                  {mesesDisponiveis.map(mes => (
+                    <option key={mes} value={mes}>{monthLabel(mes)}</option>
+                  ))}
+                </select>
+
+                <div className="relatorio-stats">
+                  <div className="relatorio-stat">
+                    <div className="relatorio-stat-num mono">{formatBRL(relatorioData.vendas)}</div>
+                    <div className="relatorio-stat-label">Total vendido</div>
+                  </div>
+                  <div className="relatorio-stat">
+                    <div className="relatorio-stat-num mono">{formatBRL(relatorioData.comissao)}</div>
+                    <div className="relatorio-stat-label">Comissão estimada</div>
+                  </div>
+                  <div className="relatorio-stat">
+                    <div className="relatorio-stat-num mono">{relatorioData.clientesNovos}</div>
+                    <div className="relatorio-stat-label">Clientes atendidos</div>
+                  </div>
+                  <div className="relatorio-stat">
+                    <div className="relatorio-stat-num mono">{relatorioData.indicacoes}</div>
+                    <div className="relatorio-stat-label">Vieram por indicação</div>
+                  </div>
+                </div>
+
+                <div className="relatorio-categorias">
+                  <div className="relatorio-categorias-title">Vendas por categoria</div>
+                  {CATEGORIA_ORDEM.map(cat => (
+                    <div key={cat} className="relatorio-categoria-row">
+                      <span>{CATEGORIA_LABELS[cat]}</span>
+                      <span className="mono">{formatBRL(relatorioData.categorias[cat])}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="modal-actions">
+                  <button type="button" className="btn ghost" onClick={() => setRelatorioOpen(false)}>Fechar</button>
                 </div>
               </div>
             </div>
