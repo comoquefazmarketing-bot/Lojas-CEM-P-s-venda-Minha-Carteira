@@ -163,9 +163,9 @@ html, body {
 .oportunidade-item:hover { background: rgba(255,255,255,0.12); }
 .oportunidade-item.excluido { opacity: 0.4; }
 .oportunidade-check { width: 14px; height: 14px; border: 1.5px solid rgba(250,246,236,0.5); border-radius: 4px; display: flex; align-items: center; justify-content: center; color: var(--gold); flex-shrink: 0; }
-.oportunidade-nome { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
-.oportunidade-motivo { font-size: 11.5px; color: rgba(250,246,236,0.65); flex: 1; }
-.oportunidade-valor { font-size: 11.5px; color: var(--gold); font-weight: 600; }
+.oportunidade-nome { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+.oportunidade-motivo { font-size: 11.5px; color: rgba(250,246,236,0.65); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oportunidade-valor { font-size: 11.5px; color: var(--gold); font-weight: 600; white-space: nowrap; flex-shrink: 0; }
 
 /* ---------- Ação do Dia ---------- */
 .acao-dia-section { border: 1px solid var(--gold); background: #FBF6E9; border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
