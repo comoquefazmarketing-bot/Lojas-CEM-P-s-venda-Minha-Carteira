@@ -264,6 +264,14 @@ function ClienteCard({
           <span className="mono-label">Total</span>
           <span className="mono-val">{formatBRL(c.valor_total)}</span>
         </div>
+        {c.proximo_contato && (
+          <div className="card-field">
+            <span className="mono-label">Próximo contato</span>
+            <span className="mono-val" style={contatoPendente ? { color: 'var(--gold)', fontWeight: 700 } : {}}>
+              {formatDateBR(c.proximo_contato)}
+            </span>
+          </div>
+        )}
       </div>
 
       {hasTermino && (
