@@ -694,7 +694,11 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
 
   const filtered = useMemo(() => {
     let list = enriched;
-    if (statusFilter !== 'TODOS') list = list.filter(c => c.status === statusFilter);
+    if (statusFilter === 'QUITADO') {
+      list = list.filter(c => c.status === 'QUITADO' || c.forma_pagamento === 'A_VISTA');
+    } else if (statusFilter !== 'TODOS') {
+      list = list.filter(c => c.status === statusFilter);
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(c =>
