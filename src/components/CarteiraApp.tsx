@@ -345,7 +345,11 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     if (isNaN(val)) { setEditingMeta(false); return; }
     setMetaMensal(val);
     setEditingMeta(false);
-    const { error } = await supabase.from('configuracoes').upsert({ meta_mensal: val }, { onConflict: 'user_id' });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { showToast('Não consegui salvar a meta'); return; }
+    const { error } = await supabase
+      .from('configuracoes')
+      .upsert({ user_id: user.id, meta_mensal: val }, { onConflict: 'user_id' });
     if (error) showToast('Não consegui salvar a meta');
   }
 
