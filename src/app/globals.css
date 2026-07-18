@@ -111,6 +111,7 @@ html, body {
 }
 .backup-btn:hover { border-color: var(--gold); color: var(--gold); }
 .logout-btn:hover { border-color: var(--rust); color: var(--rust); }
+.backup-btn:disabled { opacity: 0.85; cursor: default; border-color: var(--green); color: var(--green); }
 
 .stats-row { display:flex; gap:10px; overflow-x:auto; margin-bottom:18px; padding-bottom:2px; }
 .stat-card { flex: 0 0 auto; min-width:132px; background:var(--paper-alt); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }

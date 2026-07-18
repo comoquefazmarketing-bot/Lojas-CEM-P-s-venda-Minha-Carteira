@@ -6,7 +6,7 @@ import {
   Search, Plus, Phone, MessageCircle, X, Pencil, Trash2,
   Clock, Users, AlertTriangle, Download, LogOut, Flame,
   Snowflake, Star, Target, Check, Gift, Repeat, Handshake,
-  ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins, ClipboardList,
+  ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins, ClipboardList, Bell,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao } from '@/types';
@@ -23,6 +23,12 @@ function formatDateBR(iso: string | null | undefined) {
   const [y, m, d] = iso.split('-');
   if (!y || !m || !d) return '—';
   return `${d}/${m}/${y}`;
+}
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
 }
 function monthKey(iso: string) { return iso.slice(0, 7); }
 function monthLabel(key: string) {
@@ -325,6 +331,37 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [categoriaInput, setCategoriaInput] = useState('');
   const [relatorioOpen, setRelatorioOpen] = useState(false);
   const [relatorioMes, setRelatorioMes] = useState(() => monthKey(todayIso()));
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    setPushSupported(true);
+    navigator.serviceWorker.register('/sw.js').then(reg => {
+      reg.pushManager.getSubscription().then(sub => setPushSubscribed(!!sub));
+    }).catch(() => {});
+  }, []);
+
+  async function handleAtivarNotificacoes() {
+    try {
+      const reg = await navigator.serviceWorker.register('/sw.js');
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') { showToast('Permissão de notificação negada'); return; }
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!),
+      });
+      await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sub),
+      });
+      setPushSubscribed(true);
+      showToast('Notificações ativadas!');
+    } catch {
+      showToast('Não consegui ativar as notificações');
+    }
+  }
 
   const loadClients = useCallback(async () => {
     setLoading(true);
@@ -704,6 +741,11 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
               <div className="subtitle">{userEmail} · {stats.total} cliente{stats.total !== 1 ? 's' : ''}</div>
             </div>
             <div className="header-actions">
+              {pushSupported && (
+                <button className="backup-btn" onClick={handleAtivarNotificacoes} disabled={pushSubscribed}>
+                  <Bell size={13} /> {pushSubscribed ? 'Avisos ativos' : 'Ativar avisos'}
+                </button>
+              )}
               <button className="backup-btn" onClick={() => setRelatorioOpen(true)}><ClipboardList size={13} /> Relatório</button>
               <button className="backup-btn" onClick={exportCsv}><Download size={13} /> CSV</button>
               <button className="logout-btn" onClick={handleLogout}><LogOut size={13} /> Sair</button>
