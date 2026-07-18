@@ -1,4 +1,5 @@
 export type StatusKey = 'ATIVO' | 'ATRASADO' | 'QUITADO' | 'NEGOCIANDO';
+export type FormaPagamento = 'PARCELADO' | 'A_VISTA';
 
 export interface Cliente {
   id: string;
@@ -6,6 +7,7 @@ export interface Cliente {
   nome: string;
   telefone: string;
   produto: string | null;
+  forma_pagamento: FormaPagamento;
   valor_total: number | null;
   valor_parcela: number | null;
   numero_parcelas: number | null;
@@ -34,3 +36,8 @@ export const STATUS: Record<StatusKey, { label: string; color: string }> = {
 };
 
 export const STATUS_ORDER: StatusKey[] = ['ATIVO', 'ATRASADO', 'NEGOCIANDO', 'QUITADO'];
+
+export const FORMA_PAGAMENTO: Record<FormaPagamento, { label: string }> = {
+  PARCELADO: { label: 'Parcelado' },
+  A_VISTA: { label: 'À vista' },
+};

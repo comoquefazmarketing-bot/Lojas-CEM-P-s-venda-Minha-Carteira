@@ -9,7 +9,7 @@ import {
   ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { Cliente, StatusKey, STATUS, STATUS_ORDER } from '@/types';
+import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO } from '@/types';
 
 /* ---------------------------------- utils ---------------------------------- */
 
@@ -116,7 +116,7 @@ type AcaoDoDia = {
 };
 
 const emptyForm: Cliente = {
-  id: '', nome: '', telefone: '', produto: '',
+  id: '', nome: '', telefone: '', produto: '', forma_pagamento: 'PARCELADO',
   valor_total: null, valor_parcela: null, numero_parcelas: null,
   data_compra: new Date().toISOString().slice(0, 10),
   dia_vencimento: null, status: 'ATIVO', observacoes: '', proximo_contato: null,
@@ -199,8 +199,12 @@ function ClienteCard({
 
       <div className="card-grid">
         <div className="card-field">
-          <span className="mono-label">Parcela</span>
-          <span className="mono-val">{formatBRL(c.valor_parcela)}{c.numero_parcelas ? ` · ${c.numero_parcelas}x` : ''}</span>
+          <span className="mono-label">{c.forma_pagamento === 'A_VISTA' ? 'Pagamento' : 'Parcela'}</span>
+          <span className="mono-val">
+            {c.forma_pagamento === 'A_VISTA'
+              ? 'À vista'
+              : `${formatBRL(c.valor_parcela)}${c.numero_parcelas ? ` · ${c.numero_parcelas}x` : ''}`}
+          </span>
         </div>
         <div className="card-field">
           <span className="mono-label">Compra</span>
@@ -236,11 +240,15 @@ function ClienteCard({
       {c.observacoes && <div className="card-obs">&quot;{c.observacoes}&quot;</div>}
 
       <div className="card-actions">
-        <a className="icon-btn" href={`tel:${onlyDigits(c.telefone)}`} title="Ligar"><Phone size={16} /></a>
-        <div style={{ position: 'relative' }}>
-          <button className="icon-btn wa" title="WhatsApp" onClick={() => setWaOpen(o => !o)}><MessageCircle size={16} /></button>
-          {waOpen && <WaMenu c={c} onClose={() => setWaOpen(false)} />}
-        </div>
+        {c.telefone && (
+          <>
+            <a className="icon-btn" href={`tel:${onlyDigits(c.telefone)}`} title="Ligar"><Phone size={16} /></a>
+            <div style={{ position: 'relative' }}>
+              <button className="icon-btn wa" title="WhatsApp" onClick={() => setWaOpen(o => !o)}><MessageCircle size={16} /></button>
+              {waOpen && <WaMenu c={c} onClose={() => setWaOpen(false)} />}
+            </div>
+          </>
+        )}
         <span className="tel-display">{c.telefone || 'sem telefone'}</span>
         <div className="spacer" />
         <button className="icon-btn" onClick={() => onEdit(c)} title="Editar"><Pencil size={16} /></button>
@@ -294,17 +302,19 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.nome.trim() || !form.telefone.trim()) { showToast('Preenche pelo menos nome e telefone'); return; }
+    if (!form.nome.trim()) { showToast('Preenche pelo menos o nome'); return; }
     const num = (v: unknown) => (v === null || v === undefined || v === '') ? null : Number(v);
+    const aVista = form.forma_pagamento === 'A_VISTA';
     const payload = {
       nome: form.nome,
-      telefone: form.telefone,
+      telefone: form.telefone || null,
       produto: form.produto || null,
+      forma_pagamento: form.forma_pagamento,
       valor_total: num(form.valor_total),
-      valor_parcela: num(form.valor_parcela),
-      numero_parcelas: num(form.numero_parcelas),
+      valor_parcela: aVista ? null : num(form.valor_parcela),
+      numero_parcelas: aVista ? null : num(form.numero_parcelas),
       data_compra: form.data_compra || null,
-      dia_vencimento: num(form.dia_vencimento),
+      dia_vencimento: aVista ? null : num(form.dia_vencimento),
       status: form.status,
       observacoes: form.observacoes || null,
       proximo_contato: form.proximo_contato || null,
@@ -360,9 +370,10 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   }
 
   function exportCsv() {
-    const headers = ['Nome','Telefone','Produto','Valor Total','Valor Parcela','Numero Parcelas','Data Compra','Termino Previsto','Status','Proximo Contato','Ultimo Contato','Observacoes'];
+    const headers = ['Nome','Telefone','Produto','Forma Pagamento','Valor Total','Valor Parcela','Numero Parcelas','Data Compra','Termino Previsto','Status','Proximo Contato','Ultimo Contato','Observacoes'];
     const rows = enriched.map(c => [
-      c.nome, c.telefone, c.produto || '', c.valor_total ?? '', c.valor_parcela ?? '', c.numero_parcelas ?? '',
+      c.nome, c.telefone, c.produto || '', FORMA_PAGAMENTO[c.forma_pagamento]?.label || c.forma_pagamento,
+      c.valor_total ?? '', c.valor_parcela ?? '', c.numero_parcelas ?? '',
       formatDateBR(c.data_compra), c.terminoDate ? c.terminoDate.toLocaleDateString('pt-BR') : '',
       STATUS[c.status]?.label || c.status, formatDateBR(c.proximo_contato), formatDateBR(c.ultimo_contato),
       (c.observacoes || '').replace(/\n/g, ' '),
@@ -729,29 +740,40 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                     <input {...field('nome')} placeholder="Nome do cliente" required />
                   </div>
                   <div className="form-field">
-                    <label>Telefone / WhatsApp *</label>
-                    <input {...field('telefone')} placeholder="(17) 99999-9999" required />
+                    <label>Telefone / WhatsApp</label>
+                    <input {...field('telefone')} placeholder="(17) 99999-9999" />
                   </div>
                   <div className="form-field">
                     <label>Produto</label>
                     <input {...field('produto')} placeholder="Painel TV, sofá, geladeira..." />
                   </div>
                   <div className="form-field">
+                    <label>Forma de pagamento</label>
+                    <select {...field('forma_pagamento')}>
+                      <option value="PARCELADO">Parcelado</option>
+                      <option value="A_VISTA">À vista</option>
+                    </select>
+                  </div>
+                  <div className="form-field">
                     <label>Valor total</label>
                     <input {...field('valor_total')} type="number" step="0.01" placeholder="0,00" />
                   </div>
-                  <div className="form-field">
-                    <label>Valor da parcela</label>
-                    <input {...field('valor_parcela')} type="number" step="0.01" placeholder="0,00" />
-                  </div>
-                  <div className="form-field">
-                    <label>Número de parcelas</label>
-                    <input {...field('numero_parcelas')} type="number" min="1" placeholder="12" />
-                  </div>
-                  <div className="form-field">
-                    <label>Dia de vencimento</label>
-                    <input {...field('dia_vencimento')} type="number" min="1" max="31" placeholder="10" />
-                  </div>
+                  {form.forma_pagamento !== 'A_VISTA' && (
+                    <>
+                      <div className="form-field">
+                        <label>Valor da parcela</label>
+                        <input {...field('valor_parcela')} type="number" step="0.01" placeholder="0,00" />
+                      </div>
+                      <div className="form-field">
+                        <label>Número de parcelas</label>
+                        <input {...field('numero_parcelas')} type="number" min="1" placeholder="12" />
+                      </div>
+                      <div className="form-field">
+                        <label>Dia de vencimento</label>
+                        <input {...field('dia_vencimento')} type="number" min="1" max="31" placeholder="10" />
+                      </div>
+                    </>
+                  )}
                   <div className="form-field">
                     <label>Data da compra</label>
                     <input {...field('data_compra')} type="date" />
