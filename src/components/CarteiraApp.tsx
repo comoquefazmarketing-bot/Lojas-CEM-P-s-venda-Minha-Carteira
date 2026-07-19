@@ -892,20 +892,20 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
 
                 <div className="meta-mini-stats">
                   <div className="meta-mini">
-                    <CalendarDays size={14} />
-                    <div><div className="meta-mini-num mono">{metaCalc.diasRestantes}</div><div className="meta-mini-label">dias restantes</div></div>
+                    <CalendarDays size={14} className="meta-mini-icon" />
+                    <div className="meta-mini-text"><div className="meta-mini-num mono">{metaCalc.diasRestantes}</div><div className="meta-mini-label">dias restantes</div></div>
                   </div>
                   <div className="meta-mini">
-                    <Wallet size={14} />
-                    <div><div className="meta-mini-num mono">{formatBRL(metaCalc.valorRestante)}</div><div className="meta-mini-label">falta pra meta</div></div>
+                    <Wallet size={14} className="meta-mini-icon" />
+                    <div className="meta-mini-text"><div className="meta-mini-num mono">{formatBRL(metaCalc.valorRestante)}</div><div className="meta-mini-label">falta pra meta</div></div>
                   </div>
                   <div className="meta-mini">
-                    <TrendingUp size={14} />
-                    <div><div className="meta-mini-num mono">{metaCalc.valorRestante === 0 ? 'R$ 0' : formatBRL(metaCalc.metaDiaria)}</div><div className="meta-mini-label">vender por dia</div></div>
+                    <TrendingUp size={14} className="meta-mini-icon" />
+                    <div className="meta-mini-text"><div className="meta-mini-num mono">{metaCalc.valorRestante === 0 ? 'R$ 0' : formatBRL(metaCalc.metaDiaria)}</div><div className="meta-mini-label">vender por dia</div></div>
                   </div>
                   <div className="meta-mini" title="Estimativa aproximada: móveis 2,5%, TV 0,5%, demais produtos numa taxa média aproximada">
-                    <Coins size={14} />
-                    <div><div className="meta-mini-num mono">{formatBRL(comissaoMes)}</div><div className="meta-mini-label">comissão estimada</div></div>
+                    <Coins size={14} className="meta-mini-icon" />
+                    <div className="meta-mini-text"><div className="meta-mini-num mono">{formatBRL(comissaoMes)}</div><div className="meta-mini-label">comissão estimada</div></div>
                   </div>
                 </div>
 

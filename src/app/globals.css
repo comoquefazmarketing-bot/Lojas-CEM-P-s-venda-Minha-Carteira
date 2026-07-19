@@ -354,8 +354,10 @@ body::before {
   transition: background .15s ease, transform .15s ease;
 }
 .meta-mini:hover { background: rgba(255,255,255,0.16); transform: translateY(-1px); }
-.meta-mini-num { color: var(--paper); font-size: 15px; font-weight: 600; line-height: 1.1; overflow-wrap: break-word; }
-.meta-mini-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px; }
+.meta-mini-icon { flex-shrink: 0; }
+.meta-mini-text { min-width: 0; flex: 1 1 auto; }
+.meta-mini-num { color: var(--paper); font-size: clamp(12px, 3.6vw, 15px); font-weight: 600; line-height: 1.15; overflow-wrap: break-word; word-break: break-word; }
+.meta-mini-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px; overflow-wrap: break-word; }
 
 .piso-box { margin-top: 14px; }
 .piso-label { font-size: 11px; color: rgba(250,246,236,0.7); margin-bottom: 6px; }
