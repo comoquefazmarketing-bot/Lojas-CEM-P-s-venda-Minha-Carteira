@@ -356,6 +356,7 @@ body::before {
 .projecao-fill-over { background: linear-gradient(90deg, #6fae82, #8fd1a3); }
 .projecao-numbers { font-size: 11.5px; color: rgba(250,246,236,0.85); margin-top: 6px; }
 .projecao-over-tag { color: #a8e0b7; font-weight: 600; }
+.projecao-under-tag { color: #ffcf8a; font-weight: 600; }
 
 .meta-mini-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 4px; }
 .meta-mini {

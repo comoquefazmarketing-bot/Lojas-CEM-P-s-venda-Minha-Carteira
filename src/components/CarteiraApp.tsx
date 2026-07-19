@@ -900,7 +900,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                 <div className="meta-numbers mono">{formatBRL(vendasMesAnim)} de {formatBRL(metaMensal)}</div>
 
                 <div className="projecao-box">
-                  <div className="projecao-label"><Rocket size={13} /> Projeção do mês no seu ritmo atual</div>
+                  <div className="projecao-label"><Rocket size={13} /> Projeção pro fim do mês, no seu ritmo atual</div>
                   <div className="projecao-track">
                     <div
                       className={`projecao-fill${metaCalc.projecaoPct >= 100 ? ' projecao-fill-over' : ''}`}
@@ -909,8 +909,10 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                   </div>
                   <div className="projecao-numbers mono">
                     {formatBRL(projecaoFimMesAnim)} · {Math.round(projecaoPctAnim)}% da meta
-                    {metaCalc.projecaoPct >= 100 && (
+                    {metaCalc.projecaoPct >= 100 ? (
                       <span className="projecao-over-tag"> · supera em {formatBRL(metaCalc.projecaoFimMes - metaMensal)}</span>
+                    ) : (
+                      <span className="projecao-under-tag"> · fica {formatBRL(metaMensal - metaCalc.projecaoFimMes)} abaixo</span>
                     )}
                   </div>
                 </div>
