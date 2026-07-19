@@ -32,6 +32,13 @@ export async function GET(request: Request) {
     return new Response('Não autorizado', { status: 401 });
   }
 
+  // Enquanto o app for de usuário único, o feed só pode expor a carteira do dono
+  // (sem isso, este endpoint com service_role vazaria clientes de qualquer usuário
+  // futuro para quem tiver o token). Trocar por um token por usuário quando virar multiusuário.
+  if (!process.env.AGENDA_USER_ID) {
+    return new Response('Agenda não configurada', { status: 500 });
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   const supabase = createClient(supabaseUrl, serviceRoleKey);
@@ -39,6 +46,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from('clientes')
     .select('*')
+    .eq('user_id', process.env.AGENDA_USER_ID)
     .not('proximo_contato', 'is', null);
 
   if (error) {
