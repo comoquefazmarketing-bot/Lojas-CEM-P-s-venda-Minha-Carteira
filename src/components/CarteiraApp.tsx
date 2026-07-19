@@ -168,13 +168,11 @@ const emptyForm: Cliente = {
 
 /* ---------------------------------- motion helpers ---------------------------------- */
 
-function useCountUp(target: number, duration = 700) {
-  const [value, setValue] = useState(target);
-  const fromRef = useRef(target);
-  const firstRun = useRef(true);
+function useCountUp(target: number, duration = 900) {
+  const [value, setValue] = useState(0);
+  const fromRef = useRef(0);
 
   useEffect(() => {
-    if (firstRun.current) { firstRun.current = false; fromRef.current = target; setValue(target); return; }
     const from = fromRef.current;
     const start = performance.now();
     let raf: number;
@@ -735,6 +733,11 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   }, [metaMensal, vendasMes]);
 
   const metaPctAnim = useCountUp(metaCalc.pct);
+  const vendasMesAnim = useCountUp(vendasMes);
+  const comissaoMesAnim = useCountUp(comissaoMes);
+  const diasRestantesAnim = useCountUp(metaCalc.diasRestantes);
+  const valorRestanteAnim = useCountUp(metaCalc.valorRestante ?? 0);
+  const metaDiariaAnim = useCountUp(metaCalc.metaDiaria ?? 0);
 
   const [showConfetti, setShowConfetti] = useState(false);
   const prevMetaPctRef = useRef(0);
@@ -888,24 +891,24 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                   <div className="meta-tick" style={{ left: '75%' }} />
                   <Trophy size={16} className="meta-trophy" />
                 </div>
-                <div className="meta-numbers mono">{formatBRL(vendasMes)} de {formatBRL(metaMensal)}</div>
+                <div className="meta-numbers mono">{formatBRL(vendasMesAnim)} de {formatBRL(metaMensal)}</div>
 
                 <div className="meta-mini-stats">
                   <div className="meta-mini">
                     <CalendarDays size={14} className="meta-mini-icon" />
-                    <div className="meta-mini-text"><div className="meta-mini-num mono">{metaCalc.diasRestantes}</div><div className="meta-mini-label">dias restantes</div></div>
+                    <div className="meta-mini-text"><div className="meta-mini-num mono">{Math.round(diasRestantesAnim)}</div><div className="meta-mini-label">dias restantes</div></div>
                   </div>
                   <div className="meta-mini">
                     <Wallet size={14} className="meta-mini-icon" />
-                    <div className="meta-mini-text"><div className="meta-mini-num mono">{formatBRL(metaCalc.valorRestante)}</div><div className="meta-mini-label">falta pra meta</div></div>
+                    <div className="meta-mini-text"><div className="meta-mini-num mono">{formatBRL(valorRestanteAnim)}</div><div className="meta-mini-label">falta pra meta</div></div>
                   </div>
                   <div className="meta-mini">
                     <TrendingUp size={14} className="meta-mini-icon" />
-                    <div className="meta-mini-text"><div className="meta-mini-num mono">{metaCalc.valorRestante === 0 ? 'R$ 0' : formatBRL(metaCalc.metaDiaria)}</div><div className="meta-mini-label">vender por dia</div></div>
+                    <div className="meta-mini-text"><div className="meta-mini-num mono">{metaCalc.valorRestante === 0 ? 'R$ 0' : formatBRL(metaDiariaAnim)}</div><div className="meta-mini-label">vender por dia</div></div>
                   </div>
                   <div className="meta-mini" title="Estimativa aproximada: móveis 2,5%, TV 0,5%, demais produtos numa taxa média aproximada">
                     <Coins size={14} className="meta-mini-icon" />
-                    <div className="meta-mini-text"><div className="meta-mini-num mono">{formatBRL(comissaoMes)}</div><div className="meta-mini-label">comissão estimada</div></div>
+                    <div className="meta-mini-text"><div className="meta-mini-num mono">{formatBRL(comissaoMesAnim)}</div><div className="meta-mini-label">comissão estimada</div></div>
                   </div>
                 </div>
 
@@ -915,7 +918,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                     <div className="piso-fill" style={{ width: `${Math.min(100, (comissaoMes / SALARIO_MINIMO_GARANTIDO) * 100)}%` }} />
                   </div>
                   <div className="piso-numbers mono">
-                    {formatBRL(comissaoMes)} de {formatBRL(SALARIO_MINIMO_GARANTIDO)} · {Math.min(100, (comissaoMes / SALARIO_MINIMO_GARANTIDO) * 100).toFixed(0)}%
+                    {formatBRL(comissaoMesAnim)} de {formatBRL(SALARIO_MINIMO_GARANTIDO)} · {Math.min(100, (comissaoMes / SALARIO_MINIMO_GARANTIDO) * 100).toFixed(0)}%
                   </div>
                 </div>
 
