@@ -346,6 +346,17 @@ body::before {
 .meta-trophy { position: absolute; right: -4px; top: -2px; color: rgba(250,246,236,0.55); z-index: 0; }
 .meta-numbers { font-size: 12.5px; color: rgba(250,246,236,0.85); margin-bottom: 14px; }
 
+.projecao-box { margin-bottom: 14px; }
+.projecao-label {
+  display: flex; align-items: center; gap: 6px; font-size: 11px; color: rgba(250,246,236,0.7);
+  text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px;
+}
+.projecao-track { position: relative; height: 8px; background: rgba(255,255,255,0.12); border-radius: 999px; overflow: hidden; }
+.projecao-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--brand-yellow)); border-radius: 999px; transition: width .6s cubic-bezier(.2,.8,.3,1); }
+.projecao-fill-over { background: linear-gradient(90deg, #6fae82, #8fd1a3); }
+.projecao-numbers { font-size: 11.5px; color: rgba(250,246,236,0.85); margin-top: 6px; }
+.projecao-over-tag { color: #a8e0b7; font-weight: 600; }
+
 .meta-mini-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 4px; }
 .meta-mini {
   min-width: 0; display: flex; align-items: center; gap: 8px;

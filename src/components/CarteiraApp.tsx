@@ -6,7 +6,7 @@ import {
   Search, Plus, Phone, MessageCircle, X, Pencil, Trash2,
   Clock, Users, AlertTriangle, Download, LogOut, Flame,
   Snowflake, Star, Target, Check, Gift, Repeat, Handshake,
-  ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins, ClipboardList, Bell,
+  ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins, ClipboardList, Bell, Rocket,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao } from '@/types';
@@ -726,10 +726,14 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     const now = new Date();
     const diasNoMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const diasRestantes = Math.max(1, diasNoMes - now.getDate() + 1);
+    const diasDecorridos = Math.max(1, diasNoMes - diasRestantes + 1);
     const valorRestante = metaMensal ? Math.max(0, metaMensal - vendasMes) : null;
     const metaDiaria = valorRestante !== null ? valorRestante / diasRestantes : null;
     const pct = metaMensal && metaMensal > 0 ? Math.min(100, (vendasMes / metaMensal) * 100) : 0;
-    return { diasRestantes, valorRestante, metaDiaria, pct };
+    const mediaDiaria = vendasMes / diasDecorridos;
+    const projecaoFimMes = mediaDiaria * diasNoMes;
+    const projecaoPct = metaMensal && metaMensal > 0 ? (projecaoFimMes / metaMensal) * 100 : 0;
+    return { diasRestantes, valorRestante, metaDiaria, pct, mediaDiaria, projecaoFimMes, projecaoPct };
   }, [metaMensal, vendasMes]);
 
   const metaPctAnim = useCountUp(metaCalc.pct);
@@ -738,6 +742,8 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const diasRestantesAnim = useCountUp(metaCalc.diasRestantes);
   const valorRestanteAnim = useCountUp(metaCalc.valorRestante ?? 0);
   const metaDiariaAnim = useCountUp(metaCalc.metaDiaria ?? 0);
+  const projecaoFimMesAnim = useCountUp(metaCalc.projecaoFimMes);
+  const projecaoPctAnim = useCountUp(metaCalc.projecaoPct);
 
   const [showConfetti, setShowConfetti] = useState(false);
   const prevMetaPctRef = useRef(0);
@@ -892,6 +898,22 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                   <Trophy size={16} className="meta-trophy" />
                 </div>
                 <div className="meta-numbers mono">{formatBRL(vendasMesAnim)} de {formatBRL(metaMensal)}</div>
+
+                <div className="projecao-box">
+                  <div className="projecao-label"><Rocket size={13} /> Projeção do mês no seu ritmo atual</div>
+                  <div className="projecao-track">
+                    <div
+                      className={`projecao-fill${metaCalc.projecaoPct >= 100 ? ' projecao-fill-over' : ''}`}
+                      style={{ width: `${Math.min(100, metaCalc.projecaoPct)}%` }}
+                    />
+                  </div>
+                  <div className="projecao-numbers mono">
+                    {formatBRL(projecaoFimMesAnim)} · {Math.round(projecaoPctAnim)}% da meta
+                    {metaCalc.projecaoPct >= 100 && (
+                      <span className="projecao-over-tag"> · supera em {formatBRL(metaCalc.projecaoFimMes - metaMensal)}</span>
+                    )}
+                  </div>
+                </div>
 
                 <div className="meta-mini-stats">
                   <div className="meta-mini">
