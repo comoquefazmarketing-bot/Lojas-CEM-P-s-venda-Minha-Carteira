@@ -705,6 +705,23 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     return totais;
   }, [enriched]);
 
+  const ritmoRecenteDiario = useMemo(() => {
+    const now = new Date();
+    const janela = 7;
+    const diaFim = now.getDate();
+    const diaInicio = Math.max(1, diaFim - janela + 1);
+    const dias = diaFim - diaInicio + 1;
+    const soma = enriched.reduce((sum, c) => {
+      if (!c.data_compra || !c.valor_total) return sum;
+      const d = new Date(c.data_compra);
+      if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() >= diaInicio && d.getDate() <= diaFim) {
+        return sum + c.valor_total;
+      }
+      return sum;
+    }, 0);
+    return soma / dias;
+  }, [enriched]);
+
   const mesesDisponiveis = useMemo(() => {
     const set = new Set<string>();
     set.add(monthKey(todayIso()));
@@ -726,15 +743,16 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     const now = new Date();
     const diasNoMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const diasRestantes = Math.max(1, diasNoMes - now.getDate() + 1);
-    const diasDecorridos = Math.max(1, diasNoMes - diasRestantes + 1);
     const valorRestante = metaMensal ? Math.max(0, metaMensal - vendasMes) : null;
     const metaDiaria = valorRestante !== null ? valorRestante / diasRestantes : null;
     const pct = metaMensal && metaMensal > 0 ? Math.min(100, (vendasMes / metaMensal) * 100) : 0;
-    const mediaDiaria = vendasMes / diasDecorridos;
-    const projecaoFimMes = mediaDiaria * diasNoMes;
+    // projeta com base no ritmo dos últimos dias (não na média do mês inteiro), senão um
+    // começo de mês devagar arrasta a projeção pra baixo mesmo que o ritmo atual seja forte
+    const diasFuturos = Math.max(0, diasRestantes - 1);
+    const projecaoFimMes = vendasMes + ritmoRecenteDiario * diasFuturos;
     const projecaoPct = metaMensal && metaMensal > 0 ? (projecaoFimMes / metaMensal) * 100 : 0;
-    return { diasRestantes, valorRestante, metaDiaria, pct, mediaDiaria, projecaoFimMes, projecaoPct };
-  }, [metaMensal, vendasMes]);
+    return { diasRestantes, valorRestante, metaDiaria, pct, projecaoFimMes, projecaoPct };
+  }, [metaMensal, vendasMes, ritmoRecenteDiario]);
 
   const metaPctAnim = useCountUp(metaCalc.pct);
   const vendasMesAnim = useCountUp(vendasMes);
