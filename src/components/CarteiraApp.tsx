@@ -480,7 +480,10 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     setInteracoes((data as Interacao[]) ?? []);
   }
 
-  function openAdd() { setForm({ ...emptyForm, id: '' }); setInteracoes([]); setNovaNota(''); setFormOpen(true); }
+  function openAdd(status: StatusKey = 'ATIVO') {
+    setForm({ ...emptyForm, id: '', status, data_compra: status === 'PROSPECT' ? null : emptyForm.data_compra });
+    setInteracoes([]); setNovaNota(''); setFormOpen(true);
+  }
   function openEdit(c: Cliente) { setForm(c); setNovaNota(''); loadInteracoes(c.id); setFormOpen(true); }
 
   async function handleAddInteracao() {
@@ -1122,6 +1125,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
             </div>
           )}
 
+          <button className="fab-secondary ripple-host" onClick={(e) => { ripple(e); openAdd('PROSPECT'); }}><Users size={16} /> Novo prospect</button>
           <button className="fab ripple-host" onClick={(e) => { ripple(e); openAdd(); }}><Plus size={18} /> Novo cliente</button>
 
           {formOpen && (
@@ -1143,6 +1147,12 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                   <div className="form-field">
                     <label>{isProspectForm ? 'Produto de interesse' : 'Produto'}</label>
                     <input {...field('produto')} placeholder="Painel TV, sofá, geladeira..." />
+                  </div>
+                  <div className="form-field">
+                    <label>Status</label>
+                    <select {...field('status')}>
+                      {STATUS_ORDER.map(k => <option key={k} value={k}>{STATUS[k].label}</option>)}
+                    </select>
                   </div>
                   {!isProspectForm && (
                     <>
@@ -1186,12 +1196,6 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                   <div className="form-field">
                     <label>Data de nascimento</label>
                     <input {...field('data_nascimento')} type="date" />
-                  </div>
-                  <div className="form-field">
-                    <label>Status</label>
-                    <select {...field('status')}>
-                      {STATUS_ORDER.map(k => <option key={k} value={k}>{STATUS[k].label}</option>)}
-                    </select>
                   </div>
                   <div className="form-field">
                     <label>Indicado por</label>
