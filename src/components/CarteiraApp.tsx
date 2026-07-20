@@ -160,7 +160,7 @@ type AcaoDoDia = {
 
 const emptyForm: Cliente = {
   id: '', nome: '', telefone: '', produto: '', forma_pagamento: 'PARCELADO',
-  valor_total: null, valor_parcela: null, numero_parcelas: null,
+  valor_total: null, valor_sinal: null, valor_parcela: null, numero_parcelas: null,
   data_compra: new Date().toISOString().slice(0, 10),
   dia_vencimento: null, status: 'ATIVO', observacoes: '', proximo_contato: null,
   data_nascimento: null, indicado_por: null, ultimo_contato: null,
@@ -281,6 +281,7 @@ function ClienteCard({
   indicadorNome: string | null;
 }) {
   const s = STATUS[c.status] || STATUS.ATIVO;
+  const isProspect = c.status === 'PROSPECT';
   const hasTermino = !!(c.data_compra && c.numero_parcelas);
   const parcelasEstimadas = hasTermino
     ? Math.min(Number(c.numero_parcelas), monthsElapsed(c.data_compra as string) + 1)
@@ -298,7 +299,7 @@ function ClienteCard({
             {c.nome}
             {c.isVip && <Star size={13} className="vip-star" fill="#B8862B" />}
           </div>
-          <div className="card-produto">{c.produto || 'Produto não informado'}</div>
+          <div className="card-produto">{c.produto || (isProspect ? 'Interesse ainda não especificado' : 'Produto não informado')}</div>
           <div className="card-meta-row">
             <Termometro t={c.temperatura} />
             {indicadorNome && <span className="ref-tag">indicado por {indicadorNome}</span>}
@@ -309,29 +310,39 @@ function ClienteCard({
       </div>
 
       <div className="card-grid">
-        <div className="card-field">
-          <span className="mono-label">{c.forma_pagamento === 'A_VISTA' ? 'Pagamento' : 'Parcela'}</span>
-          <span className="mono-val">
-            {c.forma_pagamento === 'A_VISTA'
-              ? 'À vista'
-              : `${formatBRL(c.valor_parcela)}${c.numero_parcelas ? ` · ${c.numero_parcelas}x` : ''}`}
-          </span>
-        </div>
-        <div className="card-field">
-          <span className="mono-label">Compra</span>
-          <span className="mono-val">{formatDateBR(c.data_compra)}</span>
-        </div>
-        <div className="card-field">
-          <span className="mono-label">Término previsto</span>
-          <span className="mono-val" style={terminandoEmBreve ? { color: '#B8862B', fontWeight: 700 } : {}}>
-            {hasTermino && c.terminoDate ? c.terminoDate.toLocaleDateString('pt-BR') : '—'}
-            {terminandoEmBreve && c.diasParaTermino !== null ? (c.diasParaTermino >= 0 ? ` · ${c.diasParaTermino}d` : ' · vencido') : ''}
-          </span>
-        </div>
-        <div className="card-field">
-          <span className="mono-label">Total</span>
-          <span className="mono-val">{formatBRL(c.valor_total)}</span>
-        </div>
+        {!isProspect && (
+          <>
+            <div className="card-field">
+              <span className="mono-label">{c.forma_pagamento === 'A_VISTA' ? 'Pagamento' : 'Parcela'}</span>
+              <span className="mono-val">
+                {c.forma_pagamento === 'A_VISTA'
+                  ? 'À vista'
+                  : `${formatBRL(c.valor_parcela)}${c.numero_parcelas ? ` · ${c.numero_parcelas}x` : ''}`}
+              </span>
+            </div>
+            <div className="card-field">
+              <span className="mono-label">Compra</span>
+              <span className="mono-val">{formatDateBR(c.data_compra)}</span>
+            </div>
+            <div className="card-field">
+              <span className="mono-label">Término previsto</span>
+              <span className="mono-val" style={terminandoEmBreve ? { color: '#B8862B', fontWeight: 700 } : {}}>
+                {hasTermino && c.terminoDate ? c.terminoDate.toLocaleDateString('pt-BR') : '—'}
+                {terminandoEmBreve && c.diasParaTermino !== null ? (c.diasParaTermino >= 0 ? ` · ${c.diasParaTermino}d` : ' · vencido') : ''}
+              </span>
+            </div>
+            <div className="card-field">
+              <span className="mono-label">Total</span>
+              <span className="mono-val">{formatBRL(c.valor_total)}</span>
+            </div>
+            {!!c.valor_sinal && (
+              <div className="card-field">
+                <span className="mono-label">Sinal</span>
+                <span className="mono-val">{formatBRL(c.valor_sinal)}</span>
+              </div>
+            )}
+          </>
+        )}
         {c.proximo_contato && (
           <div className="card-field">
             <span className="mono-label">Próximo contato</span>
@@ -342,7 +353,7 @@ function ClienteCard({
         )}
       </div>
 
-      {hasTermino && (
+      {!isProspect && hasTermino && (
         <>
           <div className="progress-track">
             <div className="progress-fill" style={{ width: `${progresso}%`, background: s.color }} />
@@ -497,16 +508,18 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     if (!form.nome.trim()) { showToast('Preenche pelo menos o nome'); return; }
     const num = (v: unknown) => (v === null || v === undefined || v === '') ? null : Number(v);
     const aVista = form.forma_pagamento === 'A_VISTA';
+    const isProspect = form.status === 'PROSPECT';
     const payload = {
       nome: form.nome,
       telefone: form.telefone || null,
       produto: form.produto || null,
       forma_pagamento: form.forma_pagamento,
-      valor_total: num(form.valor_total),
-      valor_parcela: aVista ? null : num(form.valor_parcela),
-      numero_parcelas: aVista ? null : num(form.numero_parcelas),
-      data_compra: form.data_compra || null,
-      dia_vencimento: aVista ? null : num(form.dia_vencimento),
+      valor_total: isProspect ? null : num(form.valor_total),
+      valor_sinal: (isProspect || aVista) ? null : num(form.valor_sinal),
+      valor_parcela: (isProspect || aVista) ? null : num(form.valor_parcela),
+      numero_parcelas: (isProspect || aVista) ? null : num(form.numero_parcelas),
+      data_compra: isProspect ? null : (form.data_compra || null),
+      dia_vencimento: (isProspect || aVista) ? null : num(form.dia_vencimento),
       status: form.status,
       observacoes: form.observacoes || null,
       proximo_contato: form.proximo_contato || null,
@@ -576,10 +589,10 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   }
 
   function exportCsv() {
-    const headers = ['Nome','Telefone','Produto','Forma Pagamento','Valor Total','Valor Parcela','Numero Parcelas','Data Compra','Termino Previsto','Status','Proximo Contato','Ultimo Contato','Observacoes'];
+    const headers = ['Nome','Telefone','Produto','Forma Pagamento','Valor Total','Sinal','Valor Parcela','Numero Parcelas','Data Compra','Termino Previsto','Status','Proximo Contato','Ultimo Contato','Observacoes'];
     const rows = enriched.map(c => [
       c.nome, c.telefone, c.produto || '', FORMA_PAGAMENTO[c.forma_pagamento]?.label || c.forma_pagamento,
-      c.valor_total ?? '', c.valor_parcela ?? '', c.numero_parcelas ?? '',
+      c.valor_total ?? '', c.valor_sinal ?? '', c.valor_parcela ?? '', c.numero_parcelas ?? '',
       formatDateBR(c.data_compra), c.terminoDate ? c.terminoDate.toLocaleDateString('pt-BR') : '',
       STATUS[c.status]?.label || c.status, formatDateBR(c.proximo_contato), formatDateBR(c.ultimo_contato),
       (c.observacoes || '').replace(/\n/g, ' '),
@@ -854,6 +867,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const previewTermino = form.data_compra && form.numero_parcelas
     ? addMonths(form.data_compra, Number(form.numero_parcelas)).toLocaleDateString('pt-BR')
     : null;
+  const isProspectForm = form.status === 'PROSPECT';
 
   return (
     <div className="carteira-app">
@@ -1127,40 +1141,48 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                     <input {...field('telefone')} placeholder="(17) 99999-9999" />
                   </div>
                   <div className="form-field">
-                    <label>Produto</label>
+                    <label>{isProspectForm ? 'Produto de interesse' : 'Produto'}</label>
                     <input {...field('produto')} placeholder="Painel TV, sofá, geladeira..." />
                   </div>
-                  <div className="form-field">
-                    <label>Forma de pagamento</label>
-                    <select {...field('forma_pagamento')}>
-                      <option value="PARCELADO">Parcelado</option>
-                      <option value="A_VISTA">À vista</option>
-                    </select>
-                  </div>
-                  <div className="form-field">
-                    <label>Valor total</label>
-                    <input {...field('valor_total')} type="number" step="0.01" placeholder="0,00" />
-                  </div>
-                  {form.forma_pagamento !== 'A_VISTA' && (
+                  {!isProspectForm && (
                     <>
                       <div className="form-field">
-                        <label>Valor da parcela</label>
-                        <input {...field('valor_parcela')} type="number" step="0.01" placeholder="0,00" />
+                        <label>Forma de pagamento</label>
+                        <select {...field('forma_pagamento')}>
+                          <option value="PARCELADO">Parcelado</option>
+                          <option value="A_VISTA">À vista</option>
+                        </select>
                       </div>
                       <div className="form-field">
-                        <label>Número de parcelas</label>
-                        <input {...field('numero_parcelas')} type="number" min="1" placeholder="12" />
+                        <label>Valor total</label>
+                        <input {...field('valor_total')} type="number" step="0.01" placeholder="0,00" />
                       </div>
+                      {form.forma_pagamento !== 'A_VISTA' && (
+                        <>
+                          <div className="form-field">
+                            <label>Sinal (entrada)</label>
+                            <input {...field('valor_sinal')} type="number" step="0.01" placeholder="0,00" />
+                          </div>
+                          <div className="form-field">
+                            <label>Valor da parcela</label>
+                            <input {...field('valor_parcela')} type="number" step="0.01" placeholder="0,00" />
+                          </div>
+                          <div className="form-field">
+                            <label>Número de parcelas</label>
+                            <input {...field('numero_parcelas')} type="number" min="1" placeholder="12" />
+                          </div>
+                          <div className="form-field">
+                            <label>Dia de vencimento</label>
+                            <input {...field('dia_vencimento')} type="number" min="1" max="31" placeholder="10" />
+                          </div>
+                        </>
+                      )}
                       <div className="form-field">
-                        <label>Dia de vencimento</label>
-                        <input {...field('dia_vencimento')} type="number" min="1" max="31" placeholder="10" />
+                        <label>Data da compra</label>
+                        <input {...field('data_compra')} type="date" />
                       </div>
                     </>
                   )}
-                  <div className="form-field">
-                    <label>Data da compra</label>
-                    <input {...field('data_compra')} type="date" />
-                  </div>
                   <div className="form-field">
                     <label>Data de nascimento</label>
                     <input {...field('data_nascimento')} type="date" />
@@ -1180,7 +1202,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                       ))}
                     </select>
                   </div>
-                  {previewTermino && (
+                  {previewTermino && !isProspectForm && (
                     <div className="termino-preview">Término previsto do carnê: {previewTermino}</div>
                   )}
                   <div className="form-field">
