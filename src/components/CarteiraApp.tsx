@@ -961,7 +961,8 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
       CATEGORIA_ORDEM.forEach(cat => { categorias[cat] += porCategoria[cat]; });
     });
     const indicacoes = doMes.filter(c => c.indicado_por).length;
-    return { clientesNovos: doMes.length, vendas, comissao, categorias, indicacoes };
+    const clientesDoMes = [...doMes].sort((a, b) => (a.data_compra || '').localeCompare(b.data_compra || ''));
+    return { clientesNovos: doMes.length, vendas, comissao, categorias, indicacoes, clientesDoMes };
   }, [enriched, relatorioMes]);
 
   const metaCalc = useMemo(() => {
@@ -1637,42 +1638,77 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
               <div className="modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
                   <span className="modal-title">Relatório mensal</span>
-                  <button type="button" className="close-btn" onClick={() => setRelatorioOpen(false)}><X size={20} /></button>
-                </div>
-
-                <select className="sort-select relatorio-mes-select" value={relatorioMes} onChange={e => setRelatorioMes(e.target.value)}>
-                  {mesesDisponiveis.map(mes => (
-                    <option key={mes} value={mes}>{monthLabel(mes)}</option>
-                  ))}
-                </select>
-
-                <div className="relatorio-stats">
-                  <div className="relatorio-stat">
-                    <div className="relatorio-stat-num mono">{formatBRL(relatorioData.vendas)}</div>
-                    <div className="relatorio-stat-label">Total vendido</div>
-                  </div>
-                  <div className="relatorio-stat">
-                    <div className="relatorio-stat-num mono">{formatBRL(relatorioData.comissao)}</div>
-                    <div className="relatorio-stat-label">Comissão estimada</div>
-                  </div>
-                  <div className="relatorio-stat">
-                    <div className="relatorio-stat-num mono">{relatorioData.clientesNovos}</div>
-                    <div className="relatorio-stat-label">Clientes atendidos</div>
-                  </div>
-                  <div className="relatorio-stat">
-                    <div className="relatorio-stat-num mono">{relatorioData.indicacoes}</div>
-                    <div className="relatorio-stat-label">Vieram por indicação</div>
+                  <div className="modal-header-actions">
+                    <button type="button" className="backup-btn" onClick={() => window.print()}><Download size={13} /> Baixar PDF</button>
+                    <button type="button" className="close-btn" onClick={() => setRelatorioOpen(false)}><X size={20} /></button>
                   </div>
                 </div>
 
-                <div className="relatorio-categorias">
-                  <div className="relatorio-categorias-title">Vendas por categoria</div>
-                  {CATEGORIA_ORDEM.map(cat => (
-                    <div key={cat} className="relatorio-categoria-row">
-                      <span>{CATEGORIA_LABELS[cat]}</span>
-                      <span className="mono">{formatBRL(relatorioData.categorias[cat])}</span>
+                <div className="relatorio-print">
+                  <div className="relatorio-print-header">
+                    <img src="/logo-lojas-cem.png" alt="Lojas CEM" className="relatorio-print-logo" />
+                    <div>
+                      <div className="relatorio-print-titulo">Relatório mensal — {monthLabel(relatorioMes)}</div>
+                      <div className="relatorio-print-sub">{userEmail} · gerado em {new Date().toLocaleDateString('pt-BR')}</div>
                     </div>
-                  ))}
+                  </div>
+
+                  <select className="sort-select relatorio-mes-select" value={relatorioMes} onChange={e => setRelatorioMes(e.target.value)}>
+                    {mesesDisponiveis.map(mes => (
+                      <option key={mes} value={mes}>{monthLabel(mes)}</option>
+                    ))}
+                  </select>
+
+                  <div className="relatorio-stats">
+                    <div className="relatorio-stat">
+                      <div className="relatorio-stat-num mono">{formatBRL(relatorioData.vendas)}</div>
+                      <div className="relatorio-stat-label">Total vendido</div>
+                    </div>
+                    <div className="relatorio-stat">
+                      <div className="relatorio-stat-num mono">{formatBRL(relatorioData.comissao)}</div>
+                      <div className="relatorio-stat-label">Comissão estimada</div>
+                    </div>
+                    <div className="relatorio-stat">
+                      <div className="relatorio-stat-num mono">{relatorioData.clientesNovos}</div>
+                      <div className="relatorio-stat-label">Clientes atendidos</div>
+                    </div>
+                    <div className="relatorio-stat">
+                      <div className="relatorio-stat-num mono">{relatorioData.indicacoes}</div>
+                      <div className="relatorio-stat-label">Vieram por indicação</div>
+                    </div>
+                  </div>
+
+                  <div className="relatorio-categorias">
+                    <div className="relatorio-categorias-title">Vendas por categoria</div>
+                    {CATEGORIA_ORDEM.map(cat => (
+                      <div key={cat} className="relatorio-categoria-row">
+                        <span>{CATEGORIA_LABELS[cat]}</span>
+                        <span className="mono">{formatBRL(relatorioData.categorias[cat])}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {relatorioData.clientesDoMes.length > 0 && (
+                    <div className="relatorio-clientes">
+                      <div className="relatorio-categorias-title">Clientes do mês ({relatorioData.clientesDoMes.length})</div>
+                      <table className="relatorio-tabela">
+                        <thead>
+                          <tr><th>Nome</th><th>Produto</th><th>Status</th><th>Valor</th><th>Data</th></tr>
+                        </thead>
+                        <tbody>
+                          {relatorioData.clientesDoMes.map(c => (
+                            <tr key={c.id}>
+                              <td>{c.nome}</td>
+                              <td>{c.produto || '—'}</td>
+                              <td>{STATUS[c.status]?.label || c.status}</td>
+                              <td>{formatBRL(c.valor_total)}</td>
+                              <td>{formatDateBR(c.data_compra)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
                 <div className="modal-actions">
