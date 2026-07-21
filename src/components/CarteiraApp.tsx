@@ -303,38 +303,36 @@ function WaMenu({ c, onClose }: { c: Cliente; onClose: () => void }) {
   );
 }
 
-function TendenciaChart({ data }: { data: { iso: string; valor: number }[] }) {
-  const width = 600, height = 130, padX = 4, padY = 10;
-  const max = Math.max(1, ...data.map(d => d.valor));
-  const stepX = data.length > 1 ? (width - padX * 2) / (data.length - 1) : 0;
-  const points = data.map((d, i) => ({
-    x: padX + i * stepX,
-    y: height - padY - (d.valor / max) * (height - padY * 2),
-    ...d,
-  }));
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  const last = points[points.length - 1];
-  const areaPath = `${linePath} L${last.x.toFixed(1)},${height - padY} L${points[0].x.toFixed(1)},${height - padY} Z`;
+function formatCompactBRL(v: number) {
+  if (v <= 0) return '';
+  if (v >= 1000) return `${(v / 1000).toFixed(1).replace('.', ',')}mil`;
+  return String(Math.round(v));
+}
 
+function TendenciaChart({ data }: { data: { iso: string; valor: number }[] }) {
+  const trackHeight = 96;
+  const max = Math.max(1, ...data.map(d => d.valor));
   const maiorValor = Math.max(0, ...data.map(d => d.valor));
   const melhorIdx = maiorValor > 0 ? data.findIndex(d => d.valor === maiorValor) : -1;
+  const hojeIdx = data.length - 1;
 
   return (
-    <>
-      <svg viewBox={`0 0 ${width} ${height}`} className="tendencia-chart" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="tendenciaGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--gold)" stopOpacity="0.4" />
-            <stop offset="100%" stopColor="var(--gold)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={areaPath} className="tendencia-chart-area" />
-        <path d={linePath} className="tendencia-chart-line" />
-        {melhorIdx >= 0 && melhorIdx !== points.length - 1 && (
-          <circle cx={points[melhorIdx].x} cy={points[melhorIdx].y} r="4" className="tendencia-chart-dot-peak" />
-        )}
-        {last.valor > 0 && <circle cx={last.x} cy={last.y} r="4.5" className="tendencia-chart-dot" />}
-      </svg>
+    <div className="tendencia-chart-wrap">
+      <div className="tendencia-bars" style={{ height: trackHeight }}>
+        {data.map((d, i) => {
+          const barH = d.valor > 0 ? Math.max(4, Math.round((d.valor / max) * trackHeight)) : 2;
+          const isPeak = i === melhorIdx;
+          return (
+            <div key={d.iso} className={`tendencia-bar-col ${isPeak ? 'peak' : ''}`}>
+              <span className="tendencia-bar-valor">{formatCompactBRL(d.valor)}</span>
+              <div
+                className={`tendencia-bar ${isPeak ? 'peak' : ''} ${i === hojeIdx ? 'hoje' : ''} ${d.valor === 0 ? 'vazio' : ''}`}
+                style={{ height: barH }}
+              />
+            </div>
+          );
+        })}
+      </div>
       <div className="tendencia-eixo">
         {data.map((d, i) => (
           <div key={d.iso} className={`tendencia-eixo-item ${i === melhorIdx ? 'melhor' : ''}`}>
@@ -343,7 +341,7 @@ function TendenciaChart({ data }: { data: { iso: string; valor: number }[] }) {
           </div>
         ))}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -1285,22 +1283,22 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
           {totalUltimos14 > 0 && (
             <div className="tendencia-card">
               <div className="tendencia-header">
-                <div className="tendencia-title"><Activity size={15} /> Tendência — últimos 14 dias</div>
+                <div>
+                  <div className="tendencia-title"><Activity size={15} /> Tendência — últimos 14 dias</div>
+                  <div className="tendencia-total-big mono">{formatBRL(totalUltimos14)}</div>
+                </div>
                 {variacaoPeriodo !== null && (
                   <span className={`tendencia-badge ${variacaoPeriodo >= 0 ? 'up' : 'down'}`}>
-                    {variacaoPeriodo >= 0 ? '▲' : '▼'} {Math.abs(Math.round(variacaoPeriodo))}% vs. período anterior
+                    {variacaoPeriodo >= 0 ? '▲' : '▼'} {Math.abs(Math.round(variacaoPeriodo))}%
                   </span>
                 )}
               </div>
               <TendenciaChart data={vendasUltimos14} />
-              <div className="tendencia-total mono">
-                {formatBRL(totalUltimos14)} vendidos no período
-                {melhorDiaPeriodo && (
-                  <span className="tendencia-melhor-dia">
-                    {' '}· melhor dia: {weekdayAbbrev(melhorDiaPeriodo.iso)} {melhorDiaPeriodo.iso.slice(8, 10)}/{melhorDiaPeriodo.iso.slice(5, 7)} ({formatBRL(melhorDiaPeriodo.valor)})
-                  </span>
-                )}
-              </div>
+              {melhorDiaPeriodo && (
+                <div className="tendencia-melhor-dia">
+                  🏆 melhor dia: {weekdayAbbrev(melhorDiaPeriodo.iso)} {melhorDiaPeriodo.iso.slice(8, 10)}/{melhorDiaPeriodo.iso.slice(5, 7)} — {formatBRL(melhorDiaPeriodo.valor)}
+                </div>
+              )}
             </div>
           )}
 

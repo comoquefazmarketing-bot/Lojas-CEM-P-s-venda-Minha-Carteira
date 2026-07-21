@@ -276,27 +276,34 @@ body::before {
   -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%);
   animation: fadeInUp 0.4s cubic-bezier(.2,.8,.3,1) both;
 }
-.tendencia-header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; flex-wrap:wrap; }
-.tendencia-title { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--ink); }
-.tendencia-badge { font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; font-family:'IBM Plex Mono',monospace; }
+.tendencia-header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+.tendencia-title { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--ink-soft); }
+.tendencia-total-big { font-family:'Fraunces',serif; font-weight:700; font-size:24px; color:var(--ink); margin-top:2px; }
+.tendencia-badge { font-size:11px; font-weight:700; padding:4px 9px; border-radius:999px; font-family:'IBM Plex Mono',monospace; flex-shrink:0; }
 .tendencia-badge.up { color: var(--green); background: rgba(63,107,74,0.12); }
 .tendencia-badge.down { color: var(--rust); background: rgba(194,59,30,0.12); }
-.tendencia-chart { width:100%; height:100px; display:block; overflow:visible; }
-.tendencia-chart-area { fill: url(#tendenciaGradient); stroke:none; clip-path: inset(0 100% 0 0); animation: chartReveal 1.1s cubic-bezier(.2,.8,.3,1) 0.1s both; }
-.tendencia-chart-line {
-  fill:none; stroke: var(--gold); stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round;
-  clip-path: inset(0 100% 0 0); animation: chartReveal 1.1s cubic-bezier(.2,.8,.3,1) 0.1s both;
+
+.tendencia-chart-wrap { overflow-x:auto; overflow-y:hidden; margin:0 -4px; padding:0 4px; }
+.tendencia-bars { display:flex; align-items:flex-end; gap:5px; width:max-content; min-width:100%; }
+.tendencia-bar-col { display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; width:36px; flex-shrink:0; }
+.tendencia-bar-valor { font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:var(--ink-soft); white-space:nowrap; margin-bottom:3px; line-height:1; }
+.tendencia-bar-col.peak .tendencia-bar-valor { color: var(--gold); font-weight:700; }
+.tendencia-bar {
+  width:100%; border-radius:5px 5px 2px 2px; background: linear-gradient(180deg, var(--gold-soft), var(--gold));
+  transition: height .6s cubic-bezier(.2,.8,.3,1); animation: barGrow 0.6s cubic-bezier(.2,.8,.3,1) both;
 }
-.tendencia-chart-dot { fill: var(--gold); filter: drop-shadow(0 0 6px rgba(242,96,12,0.85)); animation: dotPulse 2s ease-in-out 1.1s infinite; }
-.tendencia-chart-dot-peak { fill: var(--gold-soft); stroke: var(--gold); stroke-width:1.5; filter: drop-shadow(0 0 4px rgba(242,96,12,0.5)); }
-.tendencia-eixo { display:flex; justify-content:space-between; padding:0 2px; margin-top:2px; }
-.tendencia-eixo-item { display:flex; flex-direction:column; align-items:center; gap:1px; flex:1; min-width:0; }
+.tendencia-bar.peak { background: linear-gradient(180deg, #FFD98A, var(--gold)); box-shadow: 0 0 10px rgba(242,96,12,0.4); }
+.tendencia-bar.hoje { box-shadow: 0 0 0 2px var(--ink) inset; }
+.tendencia-bar.vazio { background: var(--paper-alt); }
+@keyframes barGrow { from { transform: scaleY(0); transform-origin: bottom; } to { transform: scaleY(1); transform-origin: bottom; } }
+
+.tendencia-eixo { display:flex; gap:5px; width:max-content; min-width:100%; margin-top:4px; }
+.tendencia-eixo-item { display:flex; flex-direction:column; align-items:center; gap:1px; width:36px; flex-shrink:0; }
 .tendencia-eixo-dia { font-family:'IBM Plex Mono',monospace; font-size:10px; color: var(--ink-soft); }
 .tendencia-eixo-sem { font-size:8.5px; color: var(--ink-soft); opacity:0.65; text-transform:uppercase; letter-spacing:0.3px; }
 .tendencia-eixo-item.melhor .tendencia-eixo-dia { color: var(--gold); font-weight:700; }
 .tendencia-eixo-item.melhor .tendencia-eixo-sem { color: var(--gold); opacity:1; }
-.tendencia-total { font-size:11.5px; color: var(--ink-soft); text-align:right; margin-top:6px; }
-.tendencia-melhor-dia { color: var(--gold); font-weight:600; }
+.tendencia-melhor-dia { font-size:12px; color: var(--gold); font-weight:600; margin-top:10px; }
 
 .produtos-ranking { display:flex; flex-direction:column; gap:11px; margin-top:6px; }
 .produto-rank-row { display:flex; align-items:center; gap:10px; }
@@ -309,8 +316,6 @@ body::before {
 .produto-rank-track { height:6px; border-radius:999px; background: var(--paper-alt); overflow:hidden; }
 .produto-rank-fill { height:100%; background: linear-gradient(90deg, var(--gold), var(--gold-soft)); border-radius:999px; transition: width .6s cubic-bezier(.2,.8,.3,1); }
 
-@keyframes chartReveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0% 0 0); } }
-@keyframes dotPulse { 0%, 100% { r:4.5; } 50% { r:6.5; } }
 .stat-card {
   flex: 0 0 auto; min-width:132px; position: relative; overflow: hidden;
   background: rgba(255,255,255,0.6); -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%);
