@@ -514,6 +514,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [pushSupported, setPushSupported] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [metaOpen, setMetaOpen] = useState(true);
+  const [produtosOpen, setProdutosOpen] = useState(true);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -528,10 +529,15 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   useEffect(() => {
     const saved = localStorage.getItem('cem-meta-open');
     if (saved !== null) setMetaOpen(saved === '1');
+    const savedProdutos = localStorage.getItem('cem-produtos-open');
+    if (savedProdutos !== null) setProdutosOpen(savedProdutos === '1');
   }, []);
   useEffect(() => {
     localStorage.setItem('cem-meta-open', metaOpen ? '1' : '0');
   }, [metaOpen]);
+  useEffect(() => {
+    localStorage.setItem('cem-produtos-open', produtosOpen ? '1' : '0');
+  }, [produtosOpen]);
 
   function toggleSelectionMode() {
     setSelectionMode(m => !m);
@@ -909,22 +915,20 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   }, [vendasUltimos14]);
 
   const produtosMaisVendidos = useMemo(() => {
-    const mapa = new Map<string, { nome: string; count: number; valor: number }>();
+    // conta ocorrências, não valor — uma venda com vários produtos não tem o preço de
+    // cada item em separado, então "quanto vendeu de cada" seria uma estimativa falsa
+    const mapa = new Map<string, { nome: string; count: number }>();
     clients.forEach(c => {
       if (c.status === 'PROSPECT') return;
-      const itens = splitProdutos(c.produto);
-      if (itens.length === 0) return;
-      const valorPorItem = (c.valor_total || 0) / itens.length;
-      itens.forEach(item => {
+      splitProdutos(c.produto).forEach(item => {
         const chave = normalizeText(item);
         if (!chave) return;
-        const atual = mapa.get(chave) || { nome: item, count: 0, valor: 0 };
+        const atual = mapa.get(chave) || { nome: item, count: 0 };
         atual.count += 1;
-        atual.valor += valorPorItem;
         mapa.set(chave, atual);
       });
     });
-    return [...mapa.values()].sort((a, b) => b.count - a.count || b.valor - a.valor).slice(0, 8);
+    return [...mapa.values()].sort((a, b) => b.count - a.count || a.nome.localeCompare(b.nome)).slice(0, 8);
   }, [clients]);
 
   const mesesDisponiveis = useMemo(() => {
@@ -1304,29 +1308,32 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
 
           {produtosMaisVendidos.length > 0 && (
             <div className="tendencia-card">
-              <div className="tendencia-header">
+              <button type="button" className="tendencia-header tendencia-header-toggle" onClick={() => setProdutosOpen(o => !o)}>
                 <div className="tendencia-title"><BarChart3 size={15} /> Produtos mais vendidos</div>
-              </div>
-              <div className="produtos-ranking">
-                {produtosMaisVendidos.map((p, i) => {
-                  const maiorCount = produtosMaisVendidos[0].count;
-                  const pct = maiorCount > 0 ? (p.count / maiorCount) * 100 : 0;
-                  return (
-                    <div key={p.nome} className="produto-rank-row">
-                      <span className="produto-rank-pos">{i + 1}º</span>
-                      <div className="produto-rank-info">
-                        <div className="produto-rank-top">
-                          <span className="produto-rank-nome">{p.nome}</span>
-                          <span className="produto-rank-count mono">{p.count}x · {formatBRL(p.valor)}</span>
-                        </div>
-                        <div className="produto-rank-track">
-                          <div className="produto-rank-fill" style={{ width: `${pct}%` }} />
+                <ChevronDown size={16} style={{ transform: produtosOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease' }} />
+              </button>
+              {produtosOpen && (
+                <div className="produtos-ranking">
+                  {produtosMaisVendidos.map((p, i) => {
+                    const maiorCount = produtosMaisVendidos[0].count;
+                    const pct = maiorCount > 0 ? (p.count / maiorCount) * 100 : 0;
+                    return (
+                      <div key={p.nome} className="produto-rank-row">
+                        <span className="produto-rank-pos">{i + 1}º</span>
+                        <div className="produto-rank-info">
+                          <div className="produto-rank-top">
+                            <span className="produto-rank-nome">{p.nome}</span>
+                            <span className="produto-rank-count mono">{p.count}x</span>
+                          </div>
+                          <div className="produto-rank-track">
+                            <div className="produto-rank-fill" style={{ width: `${pct}%` }} />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 

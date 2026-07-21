@@ -277,6 +277,8 @@ body::before {
   animation: fadeInUp 0.4s cubic-bezier(.2,.8,.3,1) both;
 }
 .tendencia-header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+.tendencia-header-toggle { width:100%; background:none; border:none; padding:0; cursor:pointer; font-family:'IBM Plex Sans',sans-serif; align-items:center; color: var(--ink-soft); }
+.tendencia-header-toggle:hover .tendencia-title { color: var(--gold); }
 .tendencia-title { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--ink-soft); }
 .tendencia-total-big { font-family:'Fraunces',serif; font-weight:700; font-size:24px; color:var(--ink); margin-top:2px; }
 .tendencia-badge { font-size:11px; font-weight:700; padding:4px 9px; border-radius:999px; font-family:'IBM Plex Mono',monospace; flex-shrink:0; }
