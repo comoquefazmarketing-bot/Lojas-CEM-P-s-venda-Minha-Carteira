@@ -578,6 +578,30 @@ body::before {
 .form-field textarea { resize:vertical; min-height:60px; font-family:'IBM Plex Sans',sans-serif; }
 .termino-preview { grid-column:1/-1; font-size:12.5px; color:var(--gold); font-family:'IBM Plex Mono',monospace; background:#F5EDDB; padding:8px 10px; border-radius:8px; }
 
+.tags-input {
+  display:flex; flex-wrap:wrap; align-items:center; gap:6px;
+  border:1px solid var(--line); border-radius:8px; padding:6px; background:white;
+}
+.tags-input:focus-within { border-color: var(--gold); }
+.tag-chip {
+  display:inline-flex; align-items:center; gap:5px; background:var(--paper-alt); color:var(--ink);
+  font-size:12.5px; padding:5px 6px 5px 10px; border-radius:999px; white-space:nowrap;
+}
+.tag-chip button {
+  display:flex; align-items:center; justify-content:center; background:none; border:none; color:var(--ink-soft);
+  cursor:pointer; padding:2px; border-radius:999px;
+}
+.tag-chip button:hover { color: var(--rust); background: rgba(194,59,30,0.12); }
+.tags-input input {
+  flex:1 1 120px; min-width:100px; border:none; padding:5px 4px; font-size:14px; background:transparent;
+}
+.tags-input input:focus { outline:none; }
+.tag-add-btn {
+  display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:999px;
+  border:1px dashed var(--line); background:white; color:var(--ink-soft); cursor:pointer; flex-shrink:0;
+}
+.tag-add-btn:hover { border-color: var(--gold); color: var(--gold); }
+
 .historico-box { margin-top:18px; padding-top:16px; border-top:1px solid var(--line); }
 .historico-title { font-size:12px; font-weight:600; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px; }
 .historico-add { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }

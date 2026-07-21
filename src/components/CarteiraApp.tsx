@@ -411,6 +411,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [sortBy, setSortBy] = useState<'termino' | 'nome' | 'recente'>('termino');
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<Cliente>(emptyForm);
+  const [produtoDraft, setProdutoDraft] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [metaMensal, setMetaMensal] = useState<number | null>(null);
@@ -489,9 +490,9 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
 
   function openAdd(status: StatusKey = 'ATIVO') {
     setForm({ ...emptyForm, id: '', status, data_compra: status === 'PROSPECT' ? null : emptyForm.data_compra });
-    setInteracoes([]); setNovaNota(''); setFormOpen(true);
+    setInteracoes([]); setNovaNota(''); setProdutoDraft(''); setFormOpen(true);
   }
-  function openEdit(c: Cliente) { setForm(c); setNovaNota(''); loadInteracoes(c.id); setFormOpen(true); }
+  function openEdit(c: Cliente) { setForm(c); setNovaNota(''); setProdutoDraft(''); loadInteracoes(c.id); setFormOpen(true); }
 
   async function handleAddInteracao() {
     if (!novaNota.trim() || !form.id) return;
@@ -879,6 +880,19 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     : null;
   const isProspectForm = form.status === 'PROSPECT';
 
+  const produtoItems = (form.produto || '').split(',').map(s => s.trim()).filter(Boolean);
+
+  function addProdutoItem(raw?: string) {
+    const value = (raw ?? produtoDraft).trim();
+    setProdutoDraft('');
+    if (!value) return;
+    if (produtoItems.some(p => p.toLowerCase() === value.toLowerCase())) return;
+    setForm({ ...form, produto: [...produtoItems, value].join(', ') });
+  }
+  function removeProdutoItem(item: string) {
+    setForm({ ...form, produto: produtoItems.filter(p => p !== item).join(', ') });
+  }
+
   return (
     <div className="carteira-app">
       {showConfetti && <Confetti />}
@@ -1151,9 +1165,29 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                     <label>Telefone / WhatsApp</label>
                     <input {...field('telefone')} placeholder="(17) 99999-9999" />
                   </div>
-                  <div className="form-field">
-                    <label>{isProspectForm ? 'Produto de interesse' : 'Produto'}</label>
-                    <input {...field('produto')} list="produtos-sugeridos" placeholder="Painel TV, sofá, geladeira..." autoComplete="off" />
+                  <div className="form-field full">
+                    <label>{isProspectForm ? 'Produtos de interesse' : 'Produtos'}</label>
+                    <div className="tags-input">
+                      {produtoItems.map(item => (
+                        <span key={item} className="tag-chip">
+                          {item}
+                          <button type="button" onClick={() => removeProdutoItem(item)} aria-label={`Remover ${item}`}><X size={11} /></button>
+                        </span>
+                      ))}
+                      <input
+                        list="produtos-sugeridos"
+                        value={produtoDraft}
+                        onChange={e => setProdutoDraft(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addProdutoItem(); }
+                          else if (e.key === 'Backspace' && !produtoDraft && produtoItems.length) removeProdutoItem(produtoItems[produtoItems.length - 1]);
+                        }}
+                        onBlur={() => addProdutoItem()}
+                        placeholder={produtoItems.length ? 'Adicionar outro...' : 'Painel TV, sofá, geladeira...'}
+                        autoComplete="off"
+                      />
+                      <button type="button" className="tag-add-btn" onClick={() => addProdutoItem()} title="Adicionar produto"><Plus size={14} /></button>
+                    </div>
                     <datalist id="produtos-sugeridos">
                       {PRODUTOS_SUGERIDOS.map(p => <option key={p} value={p} />)}
                     </datalist>
