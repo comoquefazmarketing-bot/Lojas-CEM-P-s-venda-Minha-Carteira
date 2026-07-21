@@ -121,6 +121,13 @@ const CATEGORIA_PALAVRAS: { categoria: CategoriaProduto; palavras: string[] }[] 
 ];
 const SALARIO_MINIMO_GARANTIDO = 2500;
 
+const PRODUTOS_SUGERIDOS = [
+  'Sofá', 'Cama', 'Colchão', 'Guarda-roupa', 'Estante', 'Mesa', 'Cadeira', 'Rack',
+  'Armário', 'Painel para TV', 'Poltrona', 'Cômoda', 'Escrivaninha',
+  'Smart TV', 'TV',
+  'Geladeira', 'Fogão', 'Máquina de lavar', 'Micro-ondas', 'Freezer', 'Ar-condicionado',
+];
+
 function normalizeText(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
@@ -1146,7 +1153,10 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                   </div>
                   <div className="form-field">
                     <label>{isProspectForm ? 'Produto de interesse' : 'Produto'}</label>
-                    <input {...field('produto')} placeholder="Painel TV, sofá, geladeira..." />
+                    <input {...field('produto')} list="produtos-sugeridos" placeholder="Painel TV, sofá, geladeira..." autoComplete="off" />
+                    <datalist id="produtos-sugeridos">
+                      {PRODUTOS_SUGERIDOS.map(p => <option key={p} value={p} />)}
+                    </datalist>
                   </div>
                   <div className="form-field">
                     <label>Status</label>
