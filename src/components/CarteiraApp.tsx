@@ -1634,7 +1634,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
           )}
 
           {relatorioOpen && (
-            <div className="modal-overlay" onClick={() => setRelatorioOpen(false)}>
+            <div className="modal-overlay relatorio-modal-overlay" onClick={() => setRelatorioOpen(false)}>
               <div className="modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
                   <span className="modal-title">Relatório mensal</span>

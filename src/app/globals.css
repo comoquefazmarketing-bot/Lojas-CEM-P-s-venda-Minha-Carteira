@@ -743,18 +743,32 @@ body::before {
 .relatorio-cliente-obs { margin-top:7px; padding-top:7px; border-top:1px dashed var(--line); font-size:11.5px; color:var(--ink-soft); font-style:italic; }
 
 @media print {
-  body * { visibility:hidden; }
-  .relatorio-print, .relatorio-print * { visibility:visible; }
-  .relatorio-print {
-    position:absolute; top:0; left:0; width:100%; padding:12px 4px; color:#1D2440; background:white;
+  /* esconde TUDO fora do relatório (display:none em vez de visibility:hidden,
+     senão o espaço em branco do conteúdo escondido continua contando pra
+     paginação e gera páginas em branco) */
+  .carteira-app > *:not(.relatorio-modal-overlay) { display:none !important; }
+  .modal-overlay:not(.relatorio-modal-overlay) { display:none !important; }
+  .carteira-app { min-height:auto !important; padding:0 !important; }
+
+  .relatorio-modal-overlay {
+    position:static !important; inset:auto !important; display:block !important;
+    background:none !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
+    padding:0 !important; animation:none !important;
   }
+  .relatorio-modal-overlay .modal {
+    position:static !important; width:100% !important; max-width:none !important; max-height:none !important;
+    overflow:visible !important; box-shadow:none !important; border:none !important; border-radius:0 !important;
+    background:white !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
+    padding:0 !important; animation:none !important; color:#1D2440;
+  }
+  .modal-header, .modal-actions, .relatorio-mes-select { display:none !important; }
+
   .relatorio-print-header {
-    display:flex; align-items:center; gap:12px; margin-bottom:18px; padding-bottom:12px; border-bottom:2px solid #1D2440;
+    display:flex !important; align-items:center; gap:12px; margin-bottom:18px; padding-bottom:12px; border-bottom:2px solid #1D2440;
   }
   .relatorio-print-logo { height:30px; width:auto; }
   .relatorio-print-titulo { font-family:'Fraunces',serif; font-weight:700; font-size:19px; }
   .relatorio-print-sub { font-size:11px; color:#6b6152; margin-top:2px; }
-  .relatorio-mes-select { display:none; }
   .relatorio-stat { background:#FCEDD9 !important; border-color:#F0DCC0 !important; break-inside:avoid; }
   .relatorio-cliente-card { background:white !important; border-color:#ddd !important; break-inside:avoid; }
 }
