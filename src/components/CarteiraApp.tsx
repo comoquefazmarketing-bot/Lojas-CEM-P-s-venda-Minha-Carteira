@@ -25,6 +25,11 @@ function formatDateBR(iso: string | null | undefined) {
   if (!y || !m || !d) return '—';
   return `${d}/${m}/${y}`;
 }
+const WEEKDAY_ABBR = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+function weekdayAbbrev(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return WEEKDAY_ABBR[new Date(y, m - 1, d).getDay()];
+}
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -311,18 +316,34 @@ function TendenciaChart({ data }: { data: { iso: string; valor: number }[] }) {
   const last = points[points.length - 1];
   const areaPath = `${linePath} L${last.x.toFixed(1)},${height - padY} L${points[0].x.toFixed(1)},${height - padY} Z`;
 
+  const maiorValor = Math.max(0, ...data.map(d => d.valor));
+  const melhorIdx = maiorValor > 0 ? data.findIndex(d => d.valor === maiorValor) : -1;
+
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="tendencia-chart" preserveAspectRatio="none">
-      <defs>
-        <linearGradient id="tendenciaGradient" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--gold)" stopOpacity="0.4" />
-          <stop offset="100%" stopColor="var(--gold)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={areaPath} className="tendencia-chart-area" />
-      <path d={linePath} className="tendencia-chart-line" />
-      {last.valor > 0 && <circle cx={last.x} cy={last.y} r="4.5" className="tendencia-chart-dot" />}
-    </svg>
+    <>
+      <svg viewBox={`0 0 ${width} ${height}`} className="tendencia-chart" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="tendenciaGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--gold)" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="var(--gold)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={areaPath} className="tendencia-chart-area" />
+        <path d={linePath} className="tendencia-chart-line" />
+        {melhorIdx >= 0 && melhorIdx !== points.length - 1 && (
+          <circle cx={points[melhorIdx].x} cy={points[melhorIdx].y} r="4" className="tendencia-chart-dot-peak" />
+        )}
+        {last.valor > 0 && <circle cx={last.x} cy={last.y} r="4.5" className="tendencia-chart-dot" />}
+      </svg>
+      <div className="tendencia-eixo">
+        {data.map((d, i) => (
+          <div key={d.iso} className={`tendencia-eixo-item ${i === melhorIdx ? 'melhor' : ''}`}>
+            <span className="tendencia-eixo-dia">{d.iso.slice(8, 10)}</span>
+            <span className="tendencia-eixo-sem">{weekdayAbbrev(d.iso)}</span>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -884,6 +905,10 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
 
   const totalUltimos14 = useMemo(() => vendasUltimos14.reduce((sum, d) => sum + d.valor, 0), [vendasUltimos14]);
   const variacaoPeriodo = vendasPeriodoAnterior14 > 0 ? ((totalUltimos14 - vendasPeriodoAnterior14) / vendasPeriodoAnterior14) * 100 : null;
+  const melhorDiaPeriodo = useMemo(() => {
+    const maiorValor = Math.max(0, ...vendasUltimos14.map(d => d.valor));
+    return maiorValor > 0 ? vendasUltimos14.find(d => d.valor === maiorValor) ?? null : null;
+  }, [vendasUltimos14]);
 
   const mesesDisponiveis = useMemo(() => {
     const set = new Set<string>();
@@ -1249,7 +1274,14 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                 )}
               </div>
               <TendenciaChart data={vendasUltimos14} />
-              <div className="tendencia-total mono">{formatBRL(totalUltimos14)} vendidos no período</div>
+              <div className="tendencia-total mono">
+                {formatBRL(totalUltimos14)} vendidos no período
+                {melhorDiaPeriodo && (
+                  <span className="tendencia-melhor-dia">
+                    {' '}· melhor dia: {weekdayAbbrev(melhorDiaPeriodo.iso)} {melhorDiaPeriodo.iso.slice(8, 10)}/{melhorDiaPeriodo.iso.slice(5, 7)} ({formatBRL(melhorDiaPeriodo.valor)})
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
