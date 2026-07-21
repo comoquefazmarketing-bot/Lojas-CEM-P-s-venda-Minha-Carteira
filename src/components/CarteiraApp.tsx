@@ -7,7 +7,7 @@ import {
   Clock, Users, AlertTriangle, Download, LogOut, Flame,
   Snowflake, Star, Target, Check, Gift, Repeat, Handshake,
   ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins, ClipboardList, Bell, Rocket,
-  ListChecks, Activity,
+  ListChecks, Activity, BarChart3,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao } from '@/types';
@@ -910,6 +910,25 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     return maiorValor > 0 ? vendasUltimos14.find(d => d.valor === maiorValor) ?? null : null;
   }, [vendasUltimos14]);
 
+  const produtosMaisVendidos = useMemo(() => {
+    const mapa = new Map<string, { nome: string; count: number; valor: number }>();
+    clients.forEach(c => {
+      if (c.status === 'PROSPECT') return;
+      const itens = splitProdutos(c.produto);
+      if (itens.length === 0) return;
+      const valorPorItem = (c.valor_total || 0) / itens.length;
+      itens.forEach(item => {
+        const chave = normalizeText(item);
+        if (!chave) return;
+        const atual = mapa.get(chave) || { nome: item, count: 0, valor: 0 };
+        atual.count += 1;
+        atual.valor += valorPorItem;
+        mapa.set(chave, atual);
+      });
+    });
+    return [...mapa.values()].sort((a, b) => b.count - a.count || b.valor - a.valor).slice(0, 8);
+  }, [clients]);
+
   const mesesDisponiveis = useMemo(() => {
     const set = new Set<string>();
     set.add(monthKey(todayIso()));
@@ -1281,6 +1300,34 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                     {' '}· melhor dia: {weekdayAbbrev(melhorDiaPeriodo.iso)} {melhorDiaPeriodo.iso.slice(8, 10)}/{melhorDiaPeriodo.iso.slice(5, 7)} ({formatBRL(melhorDiaPeriodo.valor)})
                   </span>
                 )}
+              </div>
+            </div>
+          )}
+
+          {produtosMaisVendidos.length > 0 && (
+            <div className="tendencia-card">
+              <div className="tendencia-header">
+                <div className="tendencia-title"><BarChart3 size={15} /> Produtos mais vendidos</div>
+              </div>
+              <div className="produtos-ranking">
+                {produtosMaisVendidos.map((p, i) => {
+                  const maiorCount = produtosMaisVendidos[0].count;
+                  const pct = maiorCount > 0 ? (p.count / maiorCount) * 100 : 0;
+                  return (
+                    <div key={p.nome} className="produto-rank-row">
+                      <span className="produto-rank-pos">{i + 1}º</span>
+                      <div className="produto-rank-info">
+                        <div className="produto-rank-top">
+                          <span className="produto-rank-nome">{p.nome}</span>
+                          <span className="produto-rank-count mono">{p.count}x · {formatBRL(p.valor)}</span>
+                        </div>
+                        <div className="produto-rank-track">
+                          <div className="produto-rank-fill" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
