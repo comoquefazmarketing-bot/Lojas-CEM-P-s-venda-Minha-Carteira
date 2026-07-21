@@ -1691,22 +1691,37 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                   {relatorioData.clientesDoMes.length > 0 && (
                     <div className="relatorio-clientes">
                       <div className="relatorio-categorias-title">Clientes do mês ({relatorioData.clientesDoMes.length})</div>
-                      <table className="relatorio-tabela">
-                        <thead>
-                          <tr><th>Nome</th><th>Produto</th><th>Status</th><th>Valor</th><th>Data</th></tr>
-                        </thead>
-                        <tbody>
-                          {relatorioData.clientesDoMes.map(c => (
-                            <tr key={c.id}>
-                              <td>{c.nome}</td>
-                              <td>{c.produto || '—'}</td>
-                              <td>{STATUS[c.status]?.label || c.status}</td>
-                              <td>{formatBRL(c.valor_total)}</td>
-                              <td>{formatDateBR(c.data_compra)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      <div className="relatorio-clientes-lista">
+                        {relatorioData.clientesDoMes.map(c => (
+                          <div key={c.id} className="relatorio-cliente-card">
+                            <div className="relatorio-cliente-top">
+                              <span className="relatorio-cliente-nome">{c.nome}</span>
+                              <span className="relatorio-cliente-status">{STATUS[c.status]?.label || c.status}</span>
+                            </div>
+                            <div className="relatorio-cliente-grid">
+                              <span><strong>Telefone:</strong> {c.telefone || '—'}</span>
+                              <span><strong>Produto:</strong> {c.produto || '—'}</span>
+                              <span><strong>Pagamento:</strong> {FORMA_PAGAMENTO[c.forma_pagamento]?.label || c.forma_pagamento}</span>
+                              <span><strong>Valor total:</strong> {formatBRL(c.valor_total)}</span>
+                              {c.forma_pagamento !== 'A_VISTA' && (
+                                <>
+                                  <span><strong>Sinal:</strong> {formatBRL(c.valor_sinal)}</span>
+                                  <span><strong>Parcela:</strong> {formatBRL(c.valor_parcela)}{c.numero_parcelas ? ` · ${c.numero_parcelas}x` : ''}</span>
+                                  <span><strong>Vencimento:</strong> {c.dia_vencimento ? `dia ${c.dia_vencimento}` : '—'}</span>
+                                </>
+                              )}
+                              <span><strong>Data da compra:</strong> {formatDateBR(c.data_compra)}</span>
+                              <span><strong>Próximo contato:</strong> {formatDateBR(c.proximo_contato)}</span>
+                              <span><strong>Último contato:</strong> {formatDateBR(c.ultimo_contato)}</span>
+                              <span><strong>Nascimento:</strong> {formatDateBR(c.data_nascimento)}</span>
+                              {c.indicado_por && (
+                                <span><strong>Indicado por:</strong> {clienteById.get(c.indicado_por)?.nome ?? '—'}</span>
+                              )}
+                            </div>
+                            {c.observacoes && <div className="relatorio-cliente-obs">&quot;{c.observacoes}&quot;</div>}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
