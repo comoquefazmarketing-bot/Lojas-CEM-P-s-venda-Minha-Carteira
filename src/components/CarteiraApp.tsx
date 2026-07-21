@@ -110,6 +110,9 @@ function waLinkWithText(telefone: string, text: string) {
 // Taxas informadas: móveis 2,5% e TV 0,5%. Pra produtos que não se encaixam em nenhuma das
 // duas categorias, usamos uma taxa intermediária aproximada (média das duas) só pra dar uma
 // perspectiva — não é o valor oficial.
+// Uma venda pode ter vários produtos (campo Produto aceita múltiplos itens); como só existe um
+// valor_total por venda, dividimos ele igualmente entre os itens e aplicamos a taxa de cada
+// categoria separadamente — assim uma venda "Sofá + Smart TV" não cai inteira em Móveis.
 export type CategoriaProduto = 'MOVEIS' | 'TV' | 'OUTROS';
 
 const CATEGORIA_LABELS: Record<CategoriaProduto, string> = { MOVEIS: 'Móveis', TV: 'TV', OUTROS: 'Outros produtos' };
@@ -132,6 +135,10 @@ function normalizeText(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
+function splitProdutos(produto: string | null): string[] {
+  return (produto || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
 function categoriaProduto(produto: string | null): CategoriaProduto {
   if (!produto) return 'OUTROS';
   const texto = normalizeText(produto);
@@ -141,8 +148,20 @@ function categoriaProduto(produto: string | null): CategoriaProduto {
   return 'OUTROS';
 }
 
-function taxaComissao(produto: string | null): number {
-  return CATEGORIA_TAXA[categoriaProduto(produto)];
+/** Divide o valor total da venda entre os produtos cadastrados e agrupa por categoria. */
+function valorPorCategoria(produto: string | null, valorTotal: number | null): Record<CategoriaProduto, number> {
+  const totais: Record<CategoriaProduto, number> = { MOVEIS: 0, TV: 0, OUTROS: 0 };
+  if (!valorTotal) return totais;
+  const itens = splitProdutos(produto);
+  if (itens.length === 0) { totais.OUTROS = valorTotal; return totais; }
+  const valorPorItem = valorTotal / itens.length;
+  itens.forEach(item => { totais[categoriaProduto(item)] += valorPorItem; });
+  return totais;
+}
+
+function comissaoVenda(produto: string | null, valorTotal: number | null): number {
+  const porCategoria = valorPorCategoria(produto, valorTotal);
+  return CATEGORIA_ORDEM.reduce((sum, cat) => sum + porCategoria[cat] * CATEGORIA_TAXA[cat], 0);
 }
 
 /* ------------------------------- tipos derivados ------------------------------- */
@@ -710,7 +729,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
       if (!c.data_compra || !c.valor_total) return sum;
       const d = new Date(c.data_compra);
       if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
-        return sum + c.valor_total * taxaComissao(c.produto);
+        return sum + comissaoVenda(c.produto, c.valor_total);
       }
       return sum;
     }, 0);
@@ -723,17 +742,29 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
       if (!c.data_compra || !c.valor_total) return;
       const d = new Date(c.data_compra);
       if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
-        totais[categoriaProduto(c.produto)] += c.valor_total;
+        const porCategoria = valorPorCategoria(c.produto, c.valor_total);
+        CATEGORIA_ORDEM.forEach(cat => { totais[cat] += porCategoria[cat]; });
       }
     });
     return totais;
   }, [enriched]);
 
+  const primeiraDataCompra = useMemo(() => {
+    const datas = clients.map(c => c.data_compra).filter((d): d is string => !!d).sort();
+    return datas[0] ?? null;
+  }, [clients]);
+
   const ritmoRecenteDiario = useMemo(() => {
     const now = new Date();
     const janela = 7;
     const diaFim = now.getDate();
-    const diaInicio = Math.max(1, diaFim - janela + 1);
+    let diaInicio = Math.max(1, diaFim - janela + 1);
+    // não deixa a janela recuar antes da primeira venda registrada no mês — senão os dias
+    // "zerados" de antes de você começar a vender puxam o ritmo médio pra baixo à toa
+    if (primeiraDataCompra) {
+      const [py, pm, pd] = primeiraDataCompra.split('-').map(Number);
+      if (py === now.getFullYear() && pm === now.getMonth() + 1 && pd > diaInicio) diaInicio = pd;
+    }
     const dias = diaFim - diaInicio + 1;
     const soma = enriched.reduce((sum, c) => {
       if (!c.data_compra || !c.valor_total) return sum;
@@ -744,7 +775,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
       return sum;
     }, 0);
     return soma / dias;
-  }, [enriched]);
+  }, [enriched, primeiraDataCompra]);
 
   const mesesDisponiveis = useMemo(() => {
     const set = new Set<string>();
@@ -756,9 +787,12 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const relatorioData = useMemo(() => {
     const doMes = enriched.filter(c => c.data_compra && monthKey(c.data_compra) === relatorioMes);
     const vendas = doMes.reduce((sum, c) => sum + (c.valor_total || 0), 0);
-    const comissao = doMes.reduce((sum, c) => sum + (c.valor_total || 0) * taxaComissao(c.produto), 0);
+    const comissao = doMes.reduce((sum, c) => sum + comissaoVenda(c.produto, c.valor_total), 0);
     const categorias: Record<CategoriaProduto, number> = { MOVEIS: 0, TV: 0, OUTROS: 0 };
-    doMes.forEach(c => { categorias[categoriaProduto(c.produto)] += c.valor_total || 0; });
+    doMes.forEach(c => {
+      const porCategoria = valorPorCategoria(c.produto, c.valor_total);
+      CATEGORIA_ORDEM.forEach(cat => { categorias[cat] += porCategoria[cat]; });
+    });
     const indicacoes = doMes.filter(c => c.indicado_por).length;
     return { clientesNovos: doMes.length, vendas, comissao, categorias, indicacoes };
   }, [enriched, relatorioMes]);
@@ -880,7 +914,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     : null;
   const isProspectForm = form.status === 'PROSPECT';
 
-  const produtoItems = (form.produto || '').split(',').map(s => s.trim()).filter(Boolean);
+  const produtoItems = splitProdutos(form.produto);
 
   function addProdutoItem(raw?: string) {
     const value = (raw ?? produtoDraft).trim();
