@@ -7,7 +7,7 @@ import {
   Clock, Users, AlertTriangle, Download, LogOut, Flame,
   Snowflake, Star, Target, Check, Gift, Repeat, Handshake,
   ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins, ClipboardList, Bell, Rocket,
-  ListChecks, Activity, BarChart3,
+  ListChecks, Activity, BarChart3, PhoneOff,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao } from '@/types';
@@ -515,6 +515,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [metaOpen, setMetaOpen] = useState(true);
   const [produtosOpen, setProdutosOpen] = useState(true);
+  const [incompletosOpen, setIncompletosOpen] = useState(true);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -806,17 +807,29 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     return list.sort((a, b) => b.prioridade - a.prioridade);
   }, [enriched]);
 
+  const cadastrosIncompletos = useMemo(() => {
+    return enriched
+      .map(c => {
+        const faltando: string[] = [];
+        if (!c.telefone) faltando.push('telefone');
+        if (c.status !== 'PROSPECT' && !c.produto) faltando.push('produto');
+        return { cliente: c, faltando };
+      })
+      .filter(x => x.faltando.length > 0);
+  }, [enriched]);
+
   const stats = useMemo(() => {
     const total = enriched.length;
     const atrasados = enriched.filter(c => c.status === 'ATRASADO').length;
     const vips = enriched.filter(c => c.isVip).length;
-    return { total, atrasados, vips, acaoHoje: acaoDoDia.length };
-  }, [enriched, acaoDoDia]);
+    return { total, atrasados, vips, acaoHoje: acaoDoDia.length, incompletos: cadastrosIncompletos.length };
+  }, [enriched, acaoDoDia, cadastrosIncompletos]);
 
   const statTotalAnim = useCountUp(stats.total);
   const statAcaoHojeAnim = useCountUp(stats.acaoHoje);
   const statAtrasadosAnim = useCountUp(stats.atrasados);
   const statVipsAnim = useCountUp(stats.vips);
+  const statIncompletosAnim = useCountUp(stats.incompletos);
 
   const vendasMes = useMemo(() => {
     const now = new Date();
@@ -1282,6 +1295,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
             <div className="stat-card warn"><div className="stat-num mono">{Math.round(statAcaoHojeAnim)}</div><div className="stat-label"><Zap size={12} /> Ação hoje</div></div>
             <div className="stat-card danger"><div className="stat-num mono">{Math.round(statAtrasadosAnim)}</div><div className="stat-label"><AlertTriangle size={12} /> Atrasados</div></div>
             <div className="stat-card gold"><div className="stat-num mono">{Math.round(statVipsAnim)}</div><div className="stat-label"><Star size={12} /> VIPs</div></div>
+            <div className="stat-card danger"><div className="stat-num mono">{Math.round(statIncompletosAnim)}</div><div className="stat-label"><PhoneOff size={12} /> Incompletos</div></div>
           </div>
 
           {totalUltimos14 > 0 && (
@@ -1354,6 +1368,30 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                       <a className="mini-btn wa-mini" href={waLinkWithText(cliente.telefone, SCRIPTS.posvenda.build(cliente.nome, cliente.produto))} target="_blank" rel="noopener noreferrer">
                         <MessageCircle size={12} /> Chamar
                       </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {cadastrosIncompletos.length > 0 && (
+            <div className="acao-dia-section incompletos-section">
+              <button className="acao-dia-header" onClick={() => setIncompletosOpen(o => !o)}>
+                <span><PhoneOff size={15} color="var(--rust)" /> Cadastro incompleto — {cadastrosIncompletos.length} cliente{cadastrosIncompletos.length > 1 ? 's' : ''}</span>
+                <ChevronDown size={16} style={{ transform: incompletosOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+              </button>
+              {incompletosOpen && (
+                <div className="acao-dia-list">
+                  {cadastrosIncompletos.map(({ cliente, faltando }) => (
+                    <div key={cliente.id} className="acao-dia-item">
+                      <PhoneOff size={15} color="var(--rust)" />
+                      <div className="acao-dia-texto">
+                        <strong>{cliente.nome}</strong> — falta {faltando.join(' e ')}
+                      </div>
+                      <button type="button" className="mini-btn" onClick={() => openEdit(cliente)}>
+                        <Pencil size={12} /> Completar
+                      </button>
                     </div>
                   ))}
                 </div>

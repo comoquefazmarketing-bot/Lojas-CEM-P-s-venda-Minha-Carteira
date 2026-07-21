@@ -481,6 +481,11 @@ body::before {
   width: 100%; display: flex; justify-content: space-between; align-items: center; background: none; border: none;
   padding: 12px 14px; font-size: 13.5px; font-weight: 600; color: var(--ink); cursor: pointer; font-family: 'IBM Plex Sans', sans-serif;
 }
+.incompletos-section {
+  border-color: rgba(194,59,30,0.3);
+  background: linear-gradient(135deg, rgba(194,59,30,0.1), rgba(194,59,30,0.04)), rgba(255,255,255,0.55);
+  box-shadow: 0 10px 26px rgba(194,59,30,0.08);
+}
 .acao-dia-header span { display: flex; align-items: center; gap: 7px; }
 .acao-dia-list { padding: 0 14px 12px; display: flex; flex-direction: column; gap: 8px; }
 .acao-dia-item {
