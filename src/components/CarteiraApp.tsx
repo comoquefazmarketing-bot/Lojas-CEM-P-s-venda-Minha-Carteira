@@ -7,6 +7,7 @@ import {
   Clock, Users, AlertTriangle, Download, LogOut, Flame,
   Snowflake, Star, Target, Check, Gift, Repeat, Handshake,
   ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins, ClipboardList, Bell, Rocket,
+  ListChecks, Activity,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao } from '@/types';
@@ -297,14 +298,45 @@ function WaMenu({ c, onClose }: { c: Cliente; onClose: () => void }) {
   );
 }
 
+function TendenciaChart({ data }: { data: { iso: string; valor: number }[] }) {
+  const width = 600, height = 130, padX = 4, padY = 10;
+  const max = Math.max(1, ...data.map(d => d.valor));
+  const stepX = data.length > 1 ? (width - padX * 2) / (data.length - 1) : 0;
+  const points = data.map((d, i) => ({
+    x: padX + i * stepX,
+    y: height - padY - (d.valor / max) * (height - padY * 2),
+    ...d,
+  }));
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const last = points[points.length - 1];
+  const areaPath = `${linePath} L${last.x.toFixed(1)},${height - padY} L${points[0].x.toFixed(1)},${height - padY} Z`;
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="tendencia-chart" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="tendenciaGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--gold)" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="var(--gold)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaPath} className="tendencia-chart-area" />
+      <path d={linePath} className="tendencia-chart-line" />
+      {last.valor > 0 && <circle cx={last.x} cy={last.y} r="4.5" className="tendencia-chart-dot" />}
+    </svg>
+  );
+}
+
 function ClienteCard({
-  c, onEdit, onDelete, onMarcarContato, indicadorNome,
+  c, onEdit, onDelete, onMarcarContato, indicadorNome, selectionMode, selected, onToggleSelect,
 }: {
   c: EnrichedCliente;
   onEdit: (c: Cliente) => void;
   onDelete: (id: string) => void;
   onMarcarContato: (id: string) => void;
   indicadorNome: string | null;
+  selectionMode: boolean;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
 }) {
   const s = STATUS[c.status] || STATUS.ATIVO;
   const isProspect = c.status === 'PROSPECT';
@@ -318,18 +350,33 @@ function ClienteCard({
   const [waOpen, setWaOpen] = useState(false);
 
   return (
-    <div className="card" style={{ borderLeftColor: s.color }}>
+    <div
+      className={`card ${selectionMode ? 'card-selectable' : ''} ${selected ? 'card-selected' : ''}`}
+      style={{ borderLeftColor: s.color }}
+      onClick={selectionMode ? () => onToggleSelect(c.id) : undefined}
+    >
       <div className="card-top">
-        <div>
-          <div className="card-nome">
-            {c.nome}
-            {c.isVip && <Star size={13} className="vip-star" fill="#B8862B" />}
-          </div>
-          <div className="card-produto">{c.produto || (isProspect ? 'Interesse ainda não especificado' : 'Produto não informado')}</div>
-          <div className="card-meta-row">
-            <Termometro t={c.temperatura} />
-            {indicadorNome && <span className="ref-tag">indicado por {indicadorNome}</span>}
-            {c.indicacoesFeitas > 0 && <span className="ref-tag ref-tag-gold"><Handshake size={11} /> {c.indicacoesFeitas} indicação{c.indicacoesFeitas > 1 ? 'ões' : ''}</span>}
+        <div className="card-top-left">
+          {selectionMode && (
+            <input
+              type="checkbox"
+              className="card-checkbox"
+              checked={selected}
+              onChange={() => onToggleSelect(c.id)}
+              onClick={e => e.stopPropagation()}
+            />
+          )}
+          <div>
+            <div className="card-nome">
+              {c.nome}
+              {c.isVip && <Star size={13} className="vip-star" fill="#B8862B" />}
+            </div>
+            <div className="card-produto">{c.produto || (isProspect ? 'Interesse ainda não especificado' : 'Produto não informado')}</div>
+            <div className="card-meta-row">
+              <Termometro t={c.temperatura} />
+              {indicadorNome && <span className="ref-tag">indicado por {indicadorNome}</span>}
+              {c.indicacoesFeitas > 0 && <span className="ref-tag ref-tag-gold"><Handshake size={11} /> {c.indicacoesFeitas} indicação{c.indicacoesFeitas > 1 ? 'ões' : ''}</span>}
+            </div>
           </div>
         </div>
         <StampBadge statusKey={c.status} />
@@ -391,13 +438,13 @@ function ClienteCard({
       {contatoPendente && (
         <div className="alert-row">
           <div className="alert-pill"><Clock size={13} strokeWidth={2.5} /> Contato de pós-venda pendente</div>
-          <button className="mini-btn" onClick={() => onMarcarContato(c.id)}><Check size={12} /> Marcar feito</button>
+          <button className="mini-btn" onClick={e => { e.stopPropagation(); onMarcarContato(c.id); }}><Check size={12} /> Marcar feito</button>
         </div>
       )}
 
       {c.observacoes && <div className="card-obs">&quot;{c.observacoes}&quot;</div>}
 
-      <div className="card-actions">
+      <div className="card-actions" onClick={e => e.stopPropagation()}>
         {c.telefone && (
           <>
             <a className="icon-btn" href={`tel:${onlyDigits(c.telefone)}`} title="Ligar"><Phone size={16} /></a>
@@ -447,6 +494,9 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [relatorioMes, setRelatorioMes] = useState(() => monthKey(todayIso()));
   const [pushSupported, setPushSupported] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [metaOpen, setMetaOpen] = useState(true);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
@@ -455,6 +505,36 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
       reg.pushManager.getSubscription().then(sub => setPushSubscribed(!!sub));
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('cem-meta-open');
+    if (saved !== null) setMetaOpen(saved === '1');
+  }, []);
+  useEffect(() => {
+    localStorage.setItem('cem-meta-open', metaOpen ? '1' : '0');
+  }, [metaOpen]);
+
+  function toggleSelectionMode() {
+    setSelectionMode(m => !m);
+    setSelectedIds(new Set());
+  }
+  function toggleSelected(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  async function handleMarcarContatoLote() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    const { error } = await supabase.from('clientes').update({ ultimo_contato: todayIso(), proximo_contato: null }).in('id', ids);
+    if (error) { showToast('Erro ao atualizar em lote'); return; }
+    showToast(`${ids.length} cliente${ids.length > 1 ? 's' : ''} atualizado${ids.length > 1 ? 's' : ''} 👍`);
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+    loadClients();
+  }
 
   async function handleAtivarNotificacoes() {
     try {
@@ -777,6 +857,34 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     return soma / dias;
   }, [enriched, primeiraDataCompra]);
 
+  const vendasUltimos14 = useMemo(() => {
+    const dias: { iso: string; valor: number }[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - i);
+      const iso = d.toISOString().slice(0, 10);
+      const valor = enriched.reduce((sum, c) => c.data_compra === iso ? sum + (c.valor_total || 0) : sum, 0);
+      dias.push({ iso, valor });
+    }
+    return dias;
+  }, [enriched]);
+
+  const vendasPeriodoAnterior14 = useMemo(() => {
+    let soma = 0;
+    for (let i = 27; i >= 14; i--) {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - i);
+      const iso = d.toISOString().slice(0, 10);
+      soma += enriched.reduce((sum, c) => c.data_compra === iso ? sum + (c.valor_total || 0) : sum, 0);
+    }
+    return soma;
+  }, [enriched]);
+
+  const totalUltimos14 = useMemo(() => vendasUltimos14.reduce((sum, d) => sum + d.valor, 0), [vendasUltimos14]);
+  const variacaoPeriodo = vendasPeriodoAnterior14 > 0 ? ((totalUltimos14 - vendasPeriodoAnterior14) / vendasPeriodoAnterior14) * 100 : null;
+
   const mesesDisponiveis = useMemo(() => {
     const set = new Set<string>();
     set.add(monthKey(todayIso()));
@@ -958,24 +1066,37 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
           <div className={`meta-hero ${metaCalc.pct >= 100 ? 'meta-hero-done' : ''}`}>
             <div className="meta-hero-top">
               <div className="meta-label"><Target size={15} /> Meta do mês</div>
-              {editingMeta ? (
-                <input
-                  autoFocus
-                  className="meta-input"
-                  value={metaInput}
-                  onChange={e => setMetaInput(e.target.value)}
-                  onBlur={handleSaveMeta}
-                  onKeyDown={e => e.key === 'Enter' && handleSaveMeta()}
-                  placeholder="0,00"
-                />
-              ) : (
-                <button className="meta-set-btn" onClick={() => { setMetaInput(String(metaMensal ?? '')); setEditingMeta(true); }}>
-                  {metaMensal ? 'Editar' : 'Definir meta'}
+              <div className="meta-hero-top-actions">
+                {editingMeta ? (
+                  <input
+                    autoFocus
+                    className="meta-input"
+                    value={metaInput}
+                    onChange={e => setMetaInput(e.target.value)}
+                    onBlur={handleSaveMeta}
+                    onKeyDown={e => e.key === 'Enter' && handleSaveMeta()}
+                    placeholder="0,00"
+                  />
+                ) : (
+                  <button className="meta-set-btn" onClick={() => { setMetaInput(String(metaMensal ?? '')); setEditingMeta(true); }}>
+                    {metaMensal ? 'Editar' : 'Definir meta'}
+                  </button>
+                )}
+                <button type="button" className="meta-collapse-btn" onClick={() => setMetaOpen(o => !o)} title={metaOpen ? 'Recolher' : 'Expandir'}>
+                  <ChevronDown size={16} style={{ transform: metaOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease' }} />
                 </button>
-              )}
+              </div>
             </div>
 
-            {metaMensal ? (
+            {!metaOpen && metaMensal && (
+              <div className="meta-mini-summary">
+                <div className="meta-mini-summary-pct mono">{metaCalc.pct >= 100 ? '🏆' : `${Math.round(metaCalc.pct)}%`}</div>
+                <div className="meta-track-mini"><div className="meta-fill-mini" style={{ width: `${metaCalc.pct}%` }} /></div>
+                <div className="meta-mini-summary-txt mono">{formatBRL(vendasMes)} de {formatBRL(metaMensal)}</div>
+              </div>
+            )}
+
+            {metaOpen && (metaMensal ? (
               <>
                 <div className="meta-pct-big mono">
                   {metaCalc.pct >= 100 ? '🏆 Meta batida!' : `${Math.round(metaPctAnim)}%`}
@@ -1107,7 +1228,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
               </>
             ) : (
               <p className="meta-empty-msg">Define uma meta de vendas do mês pra acompanhar seu progresso aqui.</p>
-            )}
+            ))}
           </div>
 
           <div className="stats-row">
@@ -1116,6 +1237,21 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
             <div className="stat-card danger"><div className="stat-num mono">{Math.round(statAtrasadosAnim)}</div><div className="stat-label"><AlertTriangle size={12} /> Atrasados</div></div>
             <div className="stat-card gold"><div className="stat-num mono">{Math.round(statVipsAnim)}</div><div className="stat-label"><Star size={12} /> VIPs</div></div>
           </div>
+
+          {totalUltimos14 > 0 && (
+            <div className="tendencia-card">
+              <div className="tendencia-header">
+                <div className="tendencia-title"><Activity size={15} /> Tendência — últimos 14 dias</div>
+                {variacaoPeriodo !== null && (
+                  <span className={`tendencia-badge ${variacaoPeriodo >= 0 ? 'up' : 'down'}`}>
+                    {variacaoPeriodo >= 0 ? '▲' : '▼'} {Math.abs(Math.round(variacaoPeriodo))}% vs. período anterior
+                  </span>
+                )}
+              </div>
+              <TendenciaChart data={vendasUltimos14} />
+              <div className="tendencia-total mono">{formatBRL(totalUltimos14)} vendidos no período</div>
+            </div>
+          )}
 
           {acaoDoDia.length > 0 && (
             <div className="acao-dia-section">
@@ -1151,6 +1287,9 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
               <option value="recente">Compra mais recente</option>
               <option value="nome">Nome (A-Z)</option>
             </select>
+            <button type="button" className={`backup-btn ${selectionMode ? 'active' : ''}`} onClick={toggleSelectionMode}>
+              <ListChecks size={13} /> {selectionMode ? 'Cancelar' : 'Selecionar'}
+            </button>
           </div>
 
           <div className="chip-row">
@@ -1158,6 +1297,11 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
             {STATUS_ORDER.map(k => (
               <button key={k} className={`chip ${statusFilter === k ? 'active' : ''}`} onClick={() => setStatusFilter(k)}>{STATUS[k].label}</button>
             ))}
+            {selectionMode && (
+              <button className="chip" onClick={() => setSelectedIds(new Set(filtered.map(c => c.id)))}>
+                Selecionar todos ({filtered.length})
+              </button>
+            )}
           </div>
 
           {filtered.length === 0 ? (
@@ -1175,13 +1319,30 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                   onDelete={(id) => setConfirmDelete(id)}
                   onMarcarContato={handleMarcarContato}
                   indicadorNome={c.indicado_por ? (clienteById.get(c.indicado_por)?.nome ?? null) : null}
+                  selectionMode={selectionMode}
+                  selected={selectedIds.has(c.id)}
+                  onToggleSelect={toggleSelected}
                 />
               ))}
             </div>
           )}
 
-          <button className="fab-secondary ripple-host" onClick={(e) => { ripple(e); openAdd('PROSPECT'); }}><Users size={16} /> Novo prospect</button>
-          <button className="fab ripple-host" onClick={(e) => { ripple(e); openAdd(); }}><Plus size={18} /> Novo cliente</button>
+          {selectionMode ? (
+            selectedIds.size > 0 && (
+              <div className="selection-bar">
+                <span className="selection-bar-count">{selectedIds.size} selecionado{selectedIds.size > 1 ? 's' : ''}</span>
+                <div className="selection-bar-actions">
+                  <button type="button" className="btn-cancel" onClick={toggleSelectionMode}>Cancelar</button>
+                  <button type="button" className="btn-confirm" onClick={handleMarcarContatoLote}><Check size={13} /> Marcar contato feito</button>
+                </div>
+              </div>
+            )
+          ) : (
+            <>
+              <button className="fab-secondary ripple-host" onClick={(e) => { ripple(e); openAdd('PROSPECT'); }}><Users size={16} /> Novo prospect</button>
+              <button className="fab ripple-host" onClick={(e) => { ripple(e); openAdd(); }}><Plus size={18} /> Novo cliente</button>
+            </>
+          )}
 
           {formOpen && (
             <div className="modal-overlay" onClick={() => setFormOpen(false)}>
