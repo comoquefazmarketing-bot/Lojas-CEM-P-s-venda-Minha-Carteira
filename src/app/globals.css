@@ -404,6 +404,30 @@ body::before {
 .funil-pct { font-size:11.5px; color:var(--ink-soft); text-align:center; margin-top:6px; }
 .funil-ciclo { font-size:11.5px; color:var(--ink-soft); text-align:center; margin-top:4px; }
 
+.gerente-ranking-title { font-size:12px; font-weight:600; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px; }
+.gerente-vendedor-card {
+  background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:2px 0 0; margin-bottom:10px;
+  overflow:hidden; animation: fadeInUp 0.35s ease both;
+}
+.gerente-vendedor-header {
+  width:100%; display:flex; align-items:center; gap:10px; background:none; border:none; cursor:pointer;
+  padding:12px 14px; text-align:left; font-family:'IBM Plex Sans',sans-serif;
+}
+.gerente-vendedor-pos { font-size:12px; color:var(--ink-soft); width:24px; flex-shrink:0; }
+.gerente-vendedor-info { flex:1; min-width:0; }
+.gerente-vendedor-email { font-size:13.5px; font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gerente-vendedor-sub { font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+.gerente-vendedor-alerta { color:var(--rust); font-weight:600; }
+.gerente-vendedor-track { height:5px; background:var(--paper-alt); margin:0 14px 12px; border-radius:999px; overflow:hidden; }
+.gerente-vendedor-fill { height:100%; background:linear-gradient(90deg, var(--gold), var(--gold-soft)); border-radius:999px; transition: width .5s ease; }
+.gerente-vendedor-clientes { border-top:1px solid var(--line); padding:8px 14px 12px; display:flex; flex-direction:column; gap:6px; }
+.gerente-vendedor-vazio { font-size:12px; color:var(--ink-soft); font-style:italic; padding:6px 0; }
+.gerente-cliente-row { display:flex; align-items:center; gap:8px; font-size:12.5px; padding:4px 0; border-bottom:1px solid var(--paper-alt); }
+.gerente-cliente-row:last-child { border-bottom:none; }
+.gerente-cliente-nome { flex:1; min-width:0; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gerente-cliente-status { font-size:10.5px; color:var(--ink-soft); background:var(--paper-alt); padding:2px 8px; border-radius:999px; white-space:nowrap; }
+.gerente-cliente-valor { color:var(--ink-soft); flex-shrink:0; }
+
 .stat-card {
   flex: 0 0 auto; min-width:132px; position: relative; overflow: hidden;
   background: var(--surface-glass); -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%);

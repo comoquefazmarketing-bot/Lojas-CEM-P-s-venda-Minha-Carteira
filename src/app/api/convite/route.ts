@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-  const { error } = await supabaseAdmin.auth.admin.createUser({
+  const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
     email,
     password: senha,
     email_confirm: true,
@@ -39,6 +39,12 @@ export async function POST(request: Request) {
       ? 'Esse email já tem uma conta — tenta entrar direto pelo login.'
       : 'Não consegui criar a conta agora. Tenta de novo.';
     return new Response(JSON.stringify({ error: msg }), { status: 400, headers: { 'content-type': 'application/json' } });
+  }
+
+  if (created.user) {
+    // não bloqueia o cadastro se isso falhar — só faz a pessoa ficar sem entrada
+    // em profiles, o que a trata como vendedor comum (comportamento seguro por padrão)
+    await supabaseAdmin.from('profiles').insert({ user_id: created.user.id, email, role: 'vendedor' });
   }
 
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } });
