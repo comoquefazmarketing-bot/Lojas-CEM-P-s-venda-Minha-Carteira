@@ -586,6 +586,16 @@ body::before {
 
 .card-obs { font-size:12.5px; color:var(--ink-soft); font-style:italic; margin-bottom:10px; border-left:2px solid var(--line); padding-left:8px; }
 
+.btn-converter {
+  width:100%; display:flex; align-items:center; justify-content:center; gap:6px;
+  background: linear-gradient(100deg, var(--gold), var(--gold-soft)); color:white; border:none;
+  border-radius:8px; padding:9px 12px; font-size:12.5px; font-weight:700; cursor:pointer;
+  font-family:'IBM Plex Sans',sans-serif; margin-bottom:10px;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.btn-converter:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(242,96,12,0.3); }
+.btn-converter:active { transform: translateY(0) scale(0.98); }
+
 .card-actions { display:flex; align-items:center; gap:6px; padding-top:8px; border-top:1px solid var(--paper-alt); }
 .icon-btn { display:flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:7px; border:1px solid var(--line); background:white; color:var(--ink-soft); cursor:pointer; text-decoration:none; transition: transform .12s ease, border-color .12s ease, color .12s ease; }
 .icon-btn:hover { border-color:var(--ink); color:var(--ink); transform: translateY(-1px); }

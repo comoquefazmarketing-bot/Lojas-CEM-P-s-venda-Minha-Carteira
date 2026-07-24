@@ -8,7 +8,7 @@ import {
   Clock, Users, AlertTriangle, Download, LogOut, Flame,
   Snowflake, Star, Target, Check, Gift, Repeat, Handshake,
   ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins, ClipboardList, Bell, Rocket,
-  ListChecks, Activity, BarChart3, PhoneOff, MapPin, BadgePercent,
+  ListChecks, Activity, BarChart3, PhoneOff, MapPin, BadgePercent, ShoppingBag,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao } from '@/types';
@@ -401,12 +401,13 @@ function TendenciaChart({ data }: { data: { iso: string; valor: number }[] }) {
 }
 
 function ClienteCard({
-  c, onEdit, onDelete, onMarcarContato, indicadorNome, selectionMode, selected, onToggleSelect,
+  c, onEdit, onDelete, onMarcarContato, onConverter, indicadorNome, selectionMode, selected, onToggleSelect,
 }: {
   c: EnrichedCliente;
   onEdit: (c: Cliente) => void;
   onDelete: (id: string) => void;
   onMarcarContato: (id: string) => void;
+  onConverter: (c: Cliente) => void;
   indicadorNome: string | null;
   selectionMode: boolean;
   selected: boolean;
@@ -518,6 +519,16 @@ function ClienteCard({
       )}
 
       {c.observacoes && <div className="card-obs">&quot;{c.observacoes}&quot;</div>}
+
+      {isProspect && (
+        <button
+          type="button"
+          className="btn-converter"
+          onClick={e => { e.stopPropagation(); onConverter(c); }}
+        >
+          <ShoppingBag size={14} /> Converter em venda
+        </button>
+      )}
 
       <div className="card-actions" onClick={e => e.stopPropagation()}>
         {c.telefone && (
@@ -676,6 +687,10 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     setInteracoes([]); setNovaNota(''); setProdutoDraft(''); setFormOpen(true);
   }
   function openEdit(c: Cliente) { setForm(c); setNovaNota(''); setProdutoDraft(''); loadInteracoes(c.id); setFormOpen(true); }
+  function openConverter(c: Cliente) {
+    setForm({ ...c, status: 'ATIVO', data_compra: todayIso() });
+    setNovaNota(''); setProdutoDraft(''); loadInteracoes(c.id); setFormOpen(true);
+  }
 
   async function handleAddInteracao() {
     if (!novaNota.trim() || !form.id) return;
@@ -1510,6 +1525,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                   onEdit={openEdit}
                   onDelete={(id) => setConfirmDelete(id)}
                   onMarcarContato={handleMarcarContato}
+                  onConverter={openConverter}
                   indicadorNome={c.indicado_por ? (clienteById.get(c.indicado_por)?.nome ?? null) : null}
                   selectionMode={selectionMode}
                   selected={selectedIds.has(c.id)}
