@@ -8,7 +8,7 @@ import {
   Clock, Users, AlertTriangle, Download, LogOut, Flame,
   Snowflake, Star, Target, Check, Gift, Repeat, Handshake,
   ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins, ClipboardList, Bell, Rocket,
-  ListChecks, Activity, BarChart3, PhoneOff, MapPin, BadgePercent, ShoppingBag,
+  ListChecks, Activity, BarChart3, PhoneOff, MapPin, BadgePercent, ShoppingBag, Funnel,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao } from '@/types';
@@ -169,7 +169,13 @@ const PRODUTOS_SUGERIDOS = [
   'Sofá', 'Cama', 'Colchão', 'Guarda-roupa', 'Estante', 'Mesa', 'Cadeira', 'Rack',
   'Armário', 'Painel para TV', 'Poltrona', 'Cômoda', 'Escrivaninha',
   'Smart TV', 'TV',
-  'Geladeira', 'Fogão', 'Máquina de lavar', 'Micro-ondas', 'Freezer', 'Ar-condicionado',
+  'Geladeira', 'Freezer', 'Fogão', 'Cooktop', 'Forno de embutir', 'Coifa', 'Micro-ondas',
+  'Máquina de lavar', 'Lava e seca', 'Secadora de roupas', 'Ar-condicionado',
+  'Adega climatizada', 'Purificador de água', 'Ventilador', 'Climatizador de ar',
+  'Fritadeira elétrica', 'Cafeteira elétrica',
+  // marcas — principalmente eletrodomésticos
+  'Brastemp', 'Consul', 'Electrolux', 'LG', 'Samsung', 'Philco', 'Midea', 'Panasonic',
+  'Fischer', 'Continental', 'Britânia', 'Mabe', 'Esmaltec', 'Springer', 'Elgin', 'Multilaser',
 ];
 
 function normalizeText(s: string) {
@@ -230,7 +236,7 @@ const emptyForm: Cliente = {
   valor_total: null, valor_sinal: null, valor_parcela: null, numero_parcelas: null,
   data_compra: new Date().toISOString().slice(0, 10),
   dia_vencimento: null, status: 'ATIVO', observacoes: '', proximo_contato: null,
-  data_nascimento: null, indicado_por: null, ultimo_contato: null,
+  data_nascimento: null, indicado_por: null, ultimo_contato: null, data_conversao: null,
 };
 
 /* ---------------------------------- motion helpers ---------------------------------- */
@@ -565,7 +571,9 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [sortBy, setSortBy] = useState<'termino' | 'nome' | 'recente'>('termino');
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<Cliente>(emptyForm);
+  const [originalStatus, setOriginalStatus] = useState<StatusKey | null>(null);
   const [produtoDraft, setProdutoDraft] = useState('');
+  const [produtoSuggestOpen, setProdutoSuggestOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [metaMensal, setMetaMensal] = useState<number | null>(null);
@@ -584,6 +592,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [metaOpen, setMetaOpen] = useState(true);
   const [produtosOpen, setProdutosOpen] = useState(true);
+  const [funilOpen, setFunilOpen] = useState(true);
   const [incompletosOpen, setIncompletosOpen] = useState(true);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -601,6 +610,8 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     if (saved !== null) setMetaOpen(saved === '1');
     const savedProdutos = localStorage.getItem('cem-produtos-open');
     if (savedProdutos !== null) setProdutosOpen(savedProdutos === '1');
+    const savedFunil = localStorage.getItem('cem-funil-open');
+    if (savedFunil !== null) setFunilOpen(savedFunil === '1');
   }, []);
   useEffect(() => {
     localStorage.setItem('cem-meta-open', metaOpen ? '1' : '0');
@@ -608,6 +619,9 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   useEffect(() => {
     localStorage.setItem('cem-produtos-open', produtosOpen ? '1' : '0');
   }, [produtosOpen]);
+  useEffect(() => {
+    localStorage.setItem('cem-funil-open', funilOpen ? '1' : '0');
+  }, [funilOpen]);
 
   function toggleSelectionMode() {
     setSelectionMode(m => !m);
@@ -684,11 +698,16 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
 
   function openAdd(status: StatusKey = 'ATIVO') {
     setForm({ ...emptyForm, id: '', status, data_compra: status === 'PROSPECT' ? null : emptyForm.data_compra });
+    setOriginalStatus(null);
     setInteracoes([]); setNovaNota(''); setProdutoDraft(''); setFormOpen(true);
   }
-  function openEdit(c: Cliente) { setForm(c); setNovaNota(''); setProdutoDraft(''); loadInteracoes(c.id); setFormOpen(true); }
+  function openEdit(c: Cliente) {
+    setForm(c); setOriginalStatus(c.status);
+    setNovaNota(''); setProdutoDraft(''); loadInteracoes(c.id); setFormOpen(true);
+  }
   function openConverter(c: Cliente) {
     setForm({ ...c, status: 'ATIVO', data_compra: todayIso() });
+    setOriginalStatus(c.status);
     setNovaNota(''); setProdutoDraft(''); loadInteracoes(c.id); setFormOpen(true);
   }
 
@@ -718,6 +737,9 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     const num = (v: unknown) => (v === null || v === undefined || v === '') ? null : Number(v);
     const aVista = form.forma_pagamento === 'A_VISTA';
     const isProspect = form.status === 'PROSPECT';
+    // detecta automaticamente a conversão de prospect pra venda (não depende de ação manual):
+    // se o registro estava como PROSPECT antes de abrir e o status mudou pra outro, carimba hoje
+    const conversaoAgora = originalStatus === 'PROSPECT' && !isProspect;
     const payload = {
       nome: form.nome,
       telefone: form.telefone || null,
@@ -734,6 +756,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
       proximo_contato: form.proximo_contato || null,
       data_nascimento: form.data_nascimento || null,
       indicado_por: form.indicado_por || null,
+      data_conversao: conversaoAgora ? todayIso() : (form.data_conversao ?? null),
     };
 
     if (form.id) {
@@ -1018,6 +1041,14 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     return [...mapa.values()].sort((a, b) => b.count - a.count || a.nome.localeCompare(b.nome)).slice(0, 8);
   }, [clients]);
 
+  const conversao = useMemo(() => {
+    const convertidos = clients.filter(c => c.data_conversao).length;
+    const aindaProspect = clients.filter(c => c.status === 'PROSPECT').length;
+    const totalHistorico = convertidos + aindaProspect;
+    const taxa = totalHistorico > 0 ? (convertidos / totalHistorico) * 100 : null;
+    return { convertidos, aindaProspect, totalHistorico, taxa };
+  }, [clients]);
+
   const mesesDisponiveis = useMemo(() => {
     const set = new Set<string>();
     set.add(monthKey(todayIso()));
@@ -1157,6 +1188,10 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const isProspectForm = form.status === 'PROSPECT';
 
   const produtoItems = splitProdutos(form.produto);
+  const produtoSugestoesFiltradas = PRODUTOS_SUGERIDOS.filter(p =>
+    !produtoItems.some(item => item.toLowerCase() === p.toLowerCase()) &&
+    (produtoDraft.trim() === '' || normalizeText(p).includes(normalizeText(produtoDraft)))
+  ).slice(0, 8);
 
   function addProdutoItem(raw?: string) {
     const value = (raw ?? produtoDraft).trim();
@@ -1395,6 +1430,36 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
             </div>
           )}
 
+          {conversao.totalHistorico > 0 && (
+            <div className="tendencia-card">
+              <button type="button" className="tendencia-header tendencia-header-toggle" onClick={() => setFunilOpen(o => !o)}>
+                <div className="tendencia-title"><Funnel size={15} /> Funil de conversão</div>
+                <ChevronDown size={16} style={{ transform: funilOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease' }} />
+              </button>
+              {funilOpen && (
+                <>
+                  <div className="funil-row">
+                    <div className="funil-stat">
+                      <div className="funil-num mono">{conversao.aindaProspect}</div>
+                      <div className="funil-label">Prospects em aberto</div>
+                    </div>
+                    <div className="funil-arrow">→</div>
+                    <div className="funil-stat">
+                      <div className="funil-num mono funil-num-gold">{conversao.convertidos}</div>
+                      <div className="funil-label">Convertidos em venda</div>
+                    </div>
+                  </div>
+                  {conversao.taxa !== null && (
+                    <>
+                      <div className="funil-track"><div className="funil-fill" style={{ width: `${conversao.taxa}%` }} /></div>
+                      <div className="funil-pct mono">{conversao.taxa.toFixed(0)}% de taxa de conversão histórica</div>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
           {produtosMaisVendidos.length > 0 && (
             <div className="tendencia-card">
               <button type="button" className="tendencia-header tendencia-header-toggle" onClick={() => setProdutosOpen(o => !o)}>
@@ -1570,30 +1635,45 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                   </div>
                   <div className="form-field full">
                     <label>{isProspectForm ? 'Produtos de interesse' : 'Produtos'}</label>
-                    <div className="tags-input">
-                      {produtoItems.map(item => (
-                        <span key={item} className="tag-chip">
-                          {item}
-                          <button type="button" onClick={() => removeProdutoItem(item)} aria-label={`Remover ${item}`}><X size={11} /></button>
-                        </span>
-                      ))}
-                      <input
-                        list="produtos-sugeridos"
-                        value={produtoDraft}
-                        onChange={e => setProdutoDraft(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addProdutoItem(); }
-                          else if (e.key === 'Backspace' && !produtoDraft && produtoItems.length) removeProdutoItem(produtoItems[produtoItems.length - 1]);
-                        }}
-                        onBlur={() => addProdutoItem()}
-                        placeholder={produtoItems.length ? 'Adicionar outro...' : 'Painel TV, sofá, geladeira...'}
-                        autoComplete="off"
-                      />
-                      <button type="button" className="tag-add-btn" onClick={() => addProdutoItem()} title="Adicionar produto"><Plus size={14} /></button>
+                    <div className="tags-input-wrap">
+                      <div className="tags-input">
+                        {produtoItems.map(item => (
+                          <span key={item} className="tag-chip">
+                            {item}
+                            <button type="button" onClick={() => removeProdutoItem(item)} aria-label={`Remover ${item}`}><X size={11} /></button>
+                          </span>
+                        ))}
+                        <input
+                          value={produtoDraft}
+                          onChange={e => { setProdutoDraft(e.target.value); setProdutoSuggestOpen(true); }}
+                          onFocus={() => setProdutoSuggestOpen(true)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addProdutoItem(); }
+                            else if (e.key === 'Backspace' && !produtoDraft && produtoItems.length) removeProdutoItem(produtoItems[produtoItems.length - 1]);
+                            else if (e.key === 'Escape') setProdutoSuggestOpen(false);
+                          }}
+                          onBlur={() => { setProdutoSuggestOpen(false); addProdutoItem(); }}
+                          placeholder={produtoItems.length ? 'Adicionar outro...' : 'Painel TV, sofá, geladeira...'}
+                          autoComplete="off"
+                        />
+                        <button type="button" className="tag-add-btn" onClick={() => addProdutoItem()} title="Adicionar produto"><Plus size={14} /></button>
+                      </div>
+                      {produtoSuggestOpen && produtoSugestoesFiltradas.length > 0 && (
+                        <div className="produto-suggest-list">
+                          {produtoSugestoesFiltradas.map(p => (
+                            <button
+                              key={p}
+                              type="button"
+                              className="produto-suggest-item"
+                              onMouseDown={e => e.preventDefault()}
+                              onClick={() => { addProdutoItem(p); setProdutoSuggestOpen(false); }}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <datalist id="produtos-sugeridos">
-                      {PRODUTOS_SUGERIDOS.map(p => <option key={p} value={p} />)}
-                    </datalist>
                   </div>
                   <div className="form-field">
                     <label>Status</label>
