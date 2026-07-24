@@ -8,7 +8,7 @@ import {
   Clock, Users, AlertTriangle, Download, LogOut, Flame,
   Snowflake, Star, Target, Check, Gift, Repeat, Handshake,
   ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins, ClipboardList, Bell, Rocket,
-  ListChecks, Activity, BarChart3, PhoneOff, MapPin, BadgePercent, ShoppingBag, Funnel,
+  ListChecks, Activity, BarChart3, PhoneOff, MapPin, BadgePercent, ShoppingBag, Funnel, Sun, Moon,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao } from '@/types';
@@ -596,6 +596,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [incompletosOpen, setIncompletosOpen] = useState(true);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
@@ -612,6 +613,8 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     if (savedProdutos !== null) setProdutosOpen(savedProdutos === '1');
     const savedFunil = localStorage.getItem('cem-funil-open');
     if (savedFunil !== null) setFunilOpen(savedFunil === '1');
+    const domTheme = document.documentElement.getAttribute('data-theme');
+    if (domTheme === 'dark' || domTheme === 'light') setTheme(domTheme);
   }, []);
   useEffect(() => {
     localStorage.setItem('cem-meta-open', metaOpen ? '1' : '0');
@@ -622,6 +625,13 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   useEffect(() => {
     localStorage.setItem('cem-funil-open', funilOpen ? '1' : '0');
   }, [funilOpen]);
+
+  function toggleTheme() {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('cem-theme', next);
+  }
 
   function toggleSelectionMode() {
     setSelectionMode(m => !m);
@@ -1219,6 +1229,9 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
               <div className="subtitle">{userEmail} · {stats.total} cliente{stats.total !== 1 ? 's' : ''}</div>
             </div>
             <div className="header-actions">
+              <button className="backup-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}>
+                {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
+              </button>
               {pushSupported && (
                 <button className="backup-btn" onClick={handleAtivarNotificacoes} disabled={pushSubscribed}>
                   <Bell size={13} /> {pushSubscribed ? 'Avisos ativos' : 'Ativar avisos'}
