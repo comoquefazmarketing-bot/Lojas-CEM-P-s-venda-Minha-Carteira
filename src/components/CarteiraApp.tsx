@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import {
   Search, Plus, Phone, MessageCircle, X, Pencil, Trash2,
@@ -279,9 +280,26 @@ function Termometro({ t }: { t: 'quente' | 'morno' | 'frio' }) {
   return <span className="termo termo-frio" title="Esfriando — reative o contato"><Snowflake size={12} /> Frio</span>;
 }
 
-function WaMenu({ c, onClose }: { c: Cliente; onClose: () => void }) {
-  return (
-    <div className="wa-menu" onClick={(e) => e.stopPropagation()}>
+function WaMenu({ c, onClose, anchorRect }: { c: Cliente; onClose: () => void; anchorRect: DOMRect }) {
+  useEffect(() => {
+    function onDocClick() { onClose(); }
+    document.addEventListener('click', onDocClick);
+    window.addEventListener('scroll', onClose, true);
+    return () => {
+      document.removeEventListener('click', onDocClick);
+      window.removeEventListener('scroll', onClose, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const style: React.CSSProperties = {
+    position: 'fixed',
+    top: Math.min(anchorRect.bottom + 6, window.innerHeight - 220),
+    left: Math.min(anchorRect.left, window.innerWidth - 236),
+  };
+
+  return createPortal(
+    <div className="wa-menu" style={style} onClick={(e) => e.stopPropagation()}>
       <div className="wa-menu-title">Escolha o script</div>
       {(Object.keys(SCRIPTS) as ScriptKey[]).map((key) => {
         const s = SCRIPTS[key];
@@ -299,7 +317,8 @@ function WaMenu({ c, onClose }: { c: Cliente; onClose: () => void }) {
           </a>
         );
       })}
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -367,6 +386,7 @@ function ClienteCard({
   const terminandoEmBreve = c.status !== 'QUITADO' && c.diasParaTermino !== null && c.diasParaTermino <= 30;
   const contatoPendente = c.proximo_contato ? daysUntil(new Date(c.proximo_contato)) <= 0 : false;
   const [waOpen, setWaOpen] = useState(false);
+  const waBtnRef = useRef<HTMLButtonElement>(null);
 
   return (
     <div
@@ -468,8 +488,10 @@ function ClienteCard({
           <>
             <a className="icon-btn" href={`tel:${onlyDigits(c.telefone)}`} title="Ligar"><Phone size={16} /></a>
             <div style={{ position: 'relative' }}>
-              <button className="icon-btn wa" title="WhatsApp" onClick={() => setWaOpen(o => !o)}><MessageCircle size={16} /></button>
-              {waOpen && <WaMenu c={c} onClose={() => setWaOpen(false)} />}
+              <button ref={waBtnRef} className="icon-btn wa" title="WhatsApp" onClick={() => setWaOpen(o => !o)}><MessageCircle size={16} /></button>
+              {waOpen && waBtnRef.current && (
+                <WaMenu c={c} onClose={() => setWaOpen(false)} anchorRect={waBtnRef.current.getBoundingClientRect()} />
+              )}
             </div>
           </>
         )}
