@@ -8,7 +8,7 @@ import {
   Clock, Users, AlertTriangle, Download, LogOut, Flame,
   Snowflake, Star, Target, Check, Gift, Repeat, Handshake,
   ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins, ClipboardList, Bell, Rocket,
-  ListChecks, Activity, BarChart3, PhoneOff,
+  ListChecks, Activity, BarChart3, PhoneOff, MapPin, BadgePercent,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao } from '@/types';
@@ -77,9 +77,11 @@ function daysUntilBirthday(iso: string | null): number | null {
 
 /* ------------------------------- WhatsApp scripts ------------------------------- */
 
+type ScriptDef = { label: string; icon: typeof MessageCircle; build: (nome: string, produto: string | null) => string };
+
 type ScriptKey = 'posvenda' | 'carne' | 'reativacao' | 'aniversario' | 'indicacao';
 
-const SCRIPTS: Record<ScriptKey, { label: string; icon: typeof MessageCircle; build: (nome: string, produto: string | null) => string }> = {
+const SCRIPTS: Record<ScriptKey, ScriptDef> = {
   posvenda: {
     label: 'Pós-venda (satisfação)',
     icon: MessageCircle,
@@ -104,6 +106,38 @@ const SCRIPTS: Record<ScriptKey, { label: string; icon: typeof MessageCircle; bu
     label: 'Pedido de indicação',
     icon: Handshake,
     build: (nome) => `Oi ${firstName(nome)}! Aqui é o Felipe, das Lojas CEM. Fico muito feliz que você é cliente da gente 🙏 Se você conhecer alguém que tá precisando de algo pra casa, me indica? Cuido super bem de quem você mandar!`,
+  },
+};
+
+// prospect ainda não comprou — scripts focados em trazer pra loja e fechar negócio,
+// não em pós-venda (que pressupõe uma compra já feita)
+type ProspectScriptKey = 'abordagem' | 'reforco' | 'condicao' | 'convite' | 'urgencia';
+
+const PROSPECT_SCRIPTS: Record<ProspectScriptKey, ScriptDef> = {
+  abordagem: {
+    label: 'Primeiro contato',
+    icon: Handshake,
+    build: (nome, produto) => `Oi ${firstName(nome)}! Aqui é o Felipe, das Lojas CEM 😊 Vi que você se interessou ${produto ? `pelo(a) ${produto}` : 'por um dos nossos produtos'} — separei umas opções bem legais e condições que cabem no seu bolso. Posso te mandar os detalhes agora?`,
+  },
+  reforco: {
+    label: 'Reforçar interesse',
+    icon: MessageCircle,
+    build: (nome, produto) => `Oi ${firstName(nome)}, tudo bem? Aqui é o Felipe, das Lojas CEM. Passando pra saber se você ainda está de olho ${produto ? `no(a) ${produto}` : 'naquele produto'} 🙂 Separei uma condição bem em conta — quer que eu te conte os detalhes?`,
+  },
+  condicao: {
+    label: 'Condição especial pra fechar',
+    icon: BadgePercent,
+    build: (nome, produto) => `${firstName(nome)}, boa notícia! Consegui liberar uma condição especial ${produto ? `pro(a) ${produto}` : 'pra você'} — entrada facilitada e parcelas que cabem certinho no seu bolso. Vale só até essa semana, bora fechar? 🔥`,
+  },
+  convite: {
+    label: 'Convite pra loja',
+    icon: MapPin,
+    build: (nome, produto) => `Oi ${firstName(nome)}! Que tal passar aqui na loja essa semana? Assim você vê ${produto ? `o(a) ${produto}` : 'os produtos'} de pertinho, sente a qualidade, e eu já te ajudo com a melhor condição de pagamento na hora. Qual dia fica melhor pra você?`,
+  },
+  urgencia: {
+    label: 'Últimas unidades',
+    icon: Flame,
+    build: (nome, produto) => `${firstName(nome)}, corre que separei ${produto ? `um(a) ${produto}` : 'uma unidade'} com a condição que combinamos, mas o estoque tá acabando! Posso guardar pra você até amanhã?`,
   },
 };
 
@@ -298,15 +332,17 @@ function WaMenu({ c, onClose, anchorRect }: { c: Cliente; onClose: () => void; a
     left: Math.min(anchorRect.left, window.innerWidth - 236),
   };
 
+  const isProspect = c.status === 'PROSPECT';
+  const scripts: ScriptDef[] = isProspect ? Object.values(PROSPECT_SCRIPTS) : Object.values(SCRIPTS);
+
   return createPortal(
     <div className="wa-menu" style={style} onClick={(e) => e.stopPropagation()}>
-      <div className="wa-menu-title">Escolha o script</div>
-      {(Object.keys(SCRIPTS) as ScriptKey[]).map((key) => {
-        const s = SCRIPTS[key];
+      <div className="wa-menu-title">{isProspect ? 'Trazer pra loja' : 'Escolha o script'}</div>
+      {scripts.map((s) => {
         const Icon = s.icon;
         return (
           <a
-            key={key}
+            key={s.label}
             className="wa-menu-item"
             href={waLinkWithText(c.telefone, s.build(c.nome, c.produto))}
             target="_blank"
@@ -581,7 +617,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     showToast(`${ids.length} cliente${ids.length > 1 ? 's' : ''} atualizado${ids.length > 1 ? 's' : ''} 👍`);
     setSelectedIds(new Set());
     setSelectionMode(false);
-    loadClients();
+    loadClients({ silent: true });
   }
 
   async function handleAtivarNotificacoes() {
@@ -605,12 +641,12 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     }
   }
 
-  const loadClients = useCallback(async () => {
-    setLoading(true);
+  const loadClients = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     const { data, error } = await supabase.from('clientes').select('*').order('criado_em', { ascending: false });
     if (error) setErrorMsg('Não consegui carregar sua carteira. Recarrega a página.');
     else setClients(data as Cliente[]);
-    setLoading(false);
+    if (!opts?.silent) setLoading(false);
   }, [supabase]);
 
   const loadConfig = useCallback(async () => {
@@ -652,7 +688,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     await supabase.from('clientes').update({ ultimo_contato: todayIso() }).eq('id', form.id);
     setNovaNota('');
     loadInteracoes(form.id);
-    loadClients();
+    loadClients({ silent: true });
   }
 
   async function handleDeleteInteracao(id: string) {
@@ -695,7 +731,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
       showToast('Cliente adicionado à carteira');
     }
     setFormOpen(false);
-    loadClients();
+    loadClients({ silent: true });
   }
 
   async function handleDelete(id: string) {
@@ -703,14 +739,14 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     setConfirmDelete(null);
     if (error) { showToast('Erro ao excluir'); return; }
     showToast('Cliente removido');
-    loadClients();
+    loadClients({ silent: true });
   }
 
   async function handleMarcarContato(id: string) {
     const { error } = await supabase.from('clientes').update({ ultimo_contato: todayIso(), proximo_contato: null }).eq('id', id);
     if (error) { showToast('Erro ao atualizar'); return; }
     showToast('Contato registrado 👍');
-    loadClients();
+    loadClients({ silent: true });
   }
 
   async function handleSaveMeta() {
@@ -802,7 +838,8 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
         candidatos.push({ cliente: c, motivo: 'Em atraso — ligar hoje', icon: AlertTriangle, cor: 'var(--rust)', prioridade: 100 });
       }
       if (c.proximo_contato && daysUntil(new Date(c.proximo_contato)) <= 0) {
-        candidatos.push({ cliente: c, motivo: 'Contato de pós-venda vencido', icon: Clock, cor: 'var(--slate)', prioridade: 90 });
+        const motivoContato = c.status === 'PROSPECT' ? 'Follow-up de venda pendente' : 'Contato de pós-venda vencido';
+        candidatos.push({ cliente: c, motivo: motivoContato, icon: Clock, cor: 'var(--slate)', prioridade: 90 });
       }
       if (c.status !== 'QUITADO' && c.diasParaTermino !== null && c.diasParaTermino <= 15) {
         candidatos.push({ cliente: c, motivo: `Carnê termina em ${c.diasParaTermino}d — oferecer recompra`, icon: Repeat, cor: 'var(--gold)', prioridade: 85 });
@@ -1388,7 +1425,17 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                       <div className="acao-dia-texto">
                         <strong>{cliente.nome}</strong> — {motivo}
                       </div>
-                      <a className="mini-btn wa-mini" href={waLinkWithText(cliente.telefone, SCRIPTS.posvenda.build(cliente.nome, cliente.produto))} target="_blank" rel="noopener noreferrer">
+                      <a
+                        className="mini-btn wa-mini"
+                        href={waLinkWithText(
+                          cliente.telefone,
+                          cliente.status === 'PROSPECT'
+                            ? PROSPECT_SCRIPTS.abordagem.build(cliente.nome, cliente.produto)
+                            : SCRIPTS.posvenda.build(cliente.nome, cliente.produto)
+                        )}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
                         <MessageCircle size={12} /> Chamar
                       </a>
                     </div>
