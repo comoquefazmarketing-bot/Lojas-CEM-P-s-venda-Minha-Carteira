@@ -9,6 +9,7 @@ import {
   Snowflake, Star, Target, Check, Gift, Repeat, Handshake,
   ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins, ClipboardList, Bell, Rocket,
   ListChecks, Activity, BarChart3, PhoneOff, MapPin, BadgePercent, ShoppingBag, Funnel, Sun, Moon,
+  KanbanSquare, List,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao } from '@/types';
@@ -406,6 +407,61 @@ function TendenciaChart({ data }: { data: { iso: string; valor: number }[] }) {
   );
 }
 
+function KanbanCard({
+  c, onEdit, onMove,
+}: {
+  c: EnrichedCliente;
+  onEdit: (c: Cliente) => void;
+  onMove: (id: string, status: StatusKey) => void;
+}) {
+  const s = STATUS[c.status] || STATUS.ATIVO;
+  const isProspect = c.status === 'PROSPECT';
+  const [drag, setDrag] = useState<{ dx: number; dy: number } | null>(null);
+  const startRef = useRef({ x: 0, y: 0 });
+  const movedRef = useRef(false);
+
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    startRef.current = { x: e.clientX, y: e.clientY };
+    movedRef.current = false;
+    setDrag({ dx: 0, dy: 0 });
+  }
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!drag) return;
+    const dx = e.clientX - startRef.current.x;
+    const dy = e.clientY - startRef.current.y;
+    if (Math.hypot(dx, dy) > 6) movedRef.current = true;
+    setDrag({ dx, dy });
+  }
+  function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    if (!drag) return;
+    if (movedRef.current) {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const col = el?.closest('[data-kanban-col]') as HTMLElement | null;
+      const novoStatus = col?.dataset.kanbanCol as StatusKey | undefined;
+      if (novoStatus) onMove(c.id, novoStatus);
+    } else {
+      onEdit(c);
+    }
+    setDrag(null);
+  }
+
+  return (
+    <div
+      className={`kanban-card ${drag ? 'dragging' : ''}`}
+      style={{ borderLeftColor: s.color, ...(drag ? { transform: `translate(${drag.dx}px, ${drag.dy}px)` } : {}) }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={() => setDrag(null)}
+    >
+      <div className="kanban-card-nome">{c.nome}{c.isVip && <Star size={11} className="vip-star" fill="#B8862B" />}</div>
+      <div className="kanban-card-produto">{c.produto || (isProspect ? 'Interesse não especificado' : 'Produto não informado')}</div>
+      {!isProspect && !!c.valor_total && <div className="kanban-card-valor mono">{formatBRL(c.valor_total)}</div>}
+    </div>
+  );
+}
+
 function ClienteCard({
   c, onEdit, onDelete, onMarcarContato, onConverter, indicadorNome, selectionMode, selected, onToggleSelect,
 }: {
@@ -597,6 +653,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [viewMode, setViewMode] = useState<'lista' | 'kanban'>('lista');
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
@@ -615,7 +672,12 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     if (savedFunil !== null) setFunilOpen(savedFunil === '1');
     const domTheme = document.documentElement.getAttribute('data-theme');
     if (domTheme === 'dark' || domTheme === 'light') setTheme(domTheme);
+    const savedView = localStorage.getItem('cem-view-mode');
+    if (savedView === 'lista' || savedView === 'kanban') setViewMode(savedView);
   }, []);
+  useEffect(() => {
+    localStorage.setItem('cem-view-mode', viewMode);
+  }, [viewMode]);
   useEffect(() => {
     localStorage.setItem('cem-meta-open', metaOpen ? '1' : '0');
   }, [metaOpen]);
@@ -794,6 +856,21 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     const { error } = await supabase.from('clientes').update({ ultimo_contato: todayIso(), proximo_contato: null }).eq('id', id);
     if (error) { showToast('Erro ao atualizar'); return; }
     showToast('Contato registrado 👍');
+    loadClients({ silent: true });
+  }
+
+  async function handleKanbanMove(id: string, novoStatus: StatusKey) {
+    const cliente = clients.find(c => c.id === id);
+    if (!cliente || cliente.status === novoStatus) return;
+    const wasProspect = cliente.status === 'PROSPECT';
+    const update: { status: StatusKey; data_conversao?: string; data_compra?: string } = { status: novoStatus };
+    if (wasProspect && novoStatus !== 'PROSPECT') {
+      update.data_conversao = cliente.data_conversao ?? todayIso();
+      if (!cliente.data_compra) update.data_compra = todayIso();
+    }
+    const { error } = await supabase.from('clientes').update(update).eq('id', id);
+    if (error) { showToast('Erro ao mover cliente'); return; }
+    showToast(`${cliente.nome} → ${STATUS[novoStatus].label}`);
     loadClients({ silent: true });
   }
 
@@ -1056,7 +1133,18 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     const aindaProspect = clients.filter(c => c.status === 'PROSPECT').length;
     const totalHistorico = convertidos + aindaProspect;
     const taxa = totalHistorico > 0 ? (convertidos / totalHistorico) * 100 : null;
-    return { convertidos, aindaProspect, totalHistorico, taxa };
+
+    const toDateOnly = (iso: string) => {
+      const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+      return new Date(y, m - 1, d);
+    };
+    const duracoes = clients
+      .filter(c => c.data_conversao && c.criado_em)
+      .map(c => daysBetween(toDateOnly(c.criado_em as string), toDateOnly(c.data_conversao as string)))
+      .filter(d => d >= 0);
+    const cicloMedio = duracoes.length > 0 ? duracoes.reduce((a, b) => a + b, 0) / duracoes.length : null;
+
+    return { convertidos, aindaProspect, totalHistorico, taxa, cicloMedio };
   }, [clients]);
 
   const mesesDisponiveis = useMemo(() => {
@@ -1183,6 +1271,21 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
       return 0;
     });
   }, [enriched, statusFilter, search, sortBy]);
+
+  const kanbanColunas = useMemo(() => {
+    const porStatus: Record<StatusKey, EnrichedCliente[]> = { PROSPECT: [], ATIVO: [], ATRASADO: [], NEGOCIANDO: [], QUITADO: [] };
+    let base = enriched;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      base = base.filter(c =>
+        c.nome.toLowerCase().includes(q) ||
+        (c.produto || '').toLowerCase().includes(q) ||
+        (onlyDigits(q).length > 0 && onlyDigits(c.telefone).includes(onlyDigits(q)))
+      );
+    }
+    base.forEach(c => { porStatus[c.status]?.push(c); });
+    return porStatus;
+  }, [enriched, search]);
 
   function field<K extends keyof Cliente>(name: K) {
     return {
@@ -1468,6 +1571,11 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                       <div className="funil-pct mono">{conversao.taxa.toFixed(0)}% de taxa de conversão histórica</div>
                     </>
                   )}
+                  {conversao.cicloMedio !== null && (
+                    <div className="funil-ciclo mono">
+                      ⏱ {conversao.cicloMedio.toFixed(1)} dias em média até converter
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -1572,24 +1680,55 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
               <option value="recente">Compra mais recente</option>
               <option value="nome">Nome (A-Z)</option>
             </select>
-            <button type="button" className={`backup-btn ${selectionMode ? 'active' : ''}`} onClick={toggleSelectionMode}>
-              <ListChecks size={13} /> {selectionMode ? 'Cancelar' : 'Selecionar'}
+            <button
+              type="button"
+              className="backup-btn"
+              onClick={() => { setViewMode(v => v === 'lista' ? 'kanban' : 'lista'); if (selectionMode) toggleSelectionMode(); }}
+            >
+              {viewMode === 'lista' ? <><KanbanSquare size={13} /> Kanban</> : <><List size={13} /> Lista</>}
             </button>
-          </div>
-
-          <div className="chip-row">
-            <button className={`chip ${statusFilter === 'TODOS' ? 'active' : ''}`} onClick={() => setStatusFilter('TODOS')}>Todos</button>
-            {STATUS_ORDER.map(k => (
-              <button key={k} className={`chip ${statusFilter === k ? 'active' : ''}`} onClick={() => setStatusFilter(k)}>{STATUS[k].label}</button>
-            ))}
-            {selectionMode && (
-              <button className="chip" onClick={() => setSelectedIds(new Set(filtered.map(c => c.id)))}>
-                Selecionar todos ({filtered.length})
+            {viewMode === 'lista' && (
+              <button type="button" className={`backup-btn ${selectionMode ? 'active' : ''}`} onClick={toggleSelectionMode}>
+                <ListChecks size={13} /> {selectionMode ? 'Cancelar' : 'Selecionar'}
               </button>
             )}
           </div>
 
-          {filtered.length === 0 ? (
+          {viewMode === 'lista' && (
+            <div className="chip-row">
+              <button className={`chip ${statusFilter === 'TODOS' ? 'active' : ''}`} onClick={() => setStatusFilter('TODOS')}>Todos</button>
+              {STATUS_ORDER.map(k => (
+                <button key={k} className={`chip ${statusFilter === k ? 'active' : ''}`} onClick={() => setStatusFilter(k)}>{STATUS[k].label}</button>
+              ))}
+              {selectionMode && (
+                <button className="chip" onClick={() => setSelectedIds(new Set(filtered.map(c => c.id)))}>
+                  Selecionar todos ({filtered.length})
+                </button>
+              )}
+            </div>
+          )}
+
+          {viewMode === 'kanban' ? (
+            <div className="kanban-board">
+              {STATUS_ORDER.map(status => (
+                <div key={status} className="kanban-col" data-kanban-col={status}>
+                  <div className="kanban-col-header">
+                    <span>{STATUS[status].label}</span>
+                    <span className="kanban-col-count mono">{kanbanColunas[status].length}</span>
+                  </div>
+                  <div className="kanban-col-list">
+                    {kanbanColunas[status].length === 0 ? (
+                      <div className="kanban-empty">Arraste um cliente pra cá</div>
+                    ) : (
+                      kanbanColunas[status].map(c => (
+                        <KanbanCard key={c.id} c={c} onEdit={openEdit} onMove={handleKanbanMove} />
+                      ))
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="empty-state">
               <h3>{clients.length === 0 ? 'Sua carteira está vazia' : 'Nada por aqui'}</h3>
               <p>{clients.length === 0 ? 'Comece cadastrando o primeiro cliente que você atendeu.' : 'Tenta ajustar a busca ou o filtro.'}</p>

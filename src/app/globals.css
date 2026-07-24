@@ -395,6 +395,7 @@ body::before {
 .funil-track { height:8px; border-radius:999px; background:var(--paper-alt); overflow:hidden; margin-top:14px; }
 .funil-fill { height:100%; background: linear-gradient(90deg, var(--slate), var(--gold)); border-radius:999px; transition: width .6s cubic-bezier(.2,.8,.3,1); }
 .funil-pct { font-size:11.5px; color:var(--ink-soft); text-align:center; margin-top:6px; }
+.funil-ciclo { font-size:11.5px; color:var(--ink-soft); text-align:center; margin-top:4px; }
 
 .stat-card {
   flex: 0 0 auto; min-width:132px; position: relative; overflow: hidden;
@@ -623,6 +624,31 @@ body::before {
   color: var(--paper); border-color: transparent;
   box-shadow: 0 6px 16px rgba(15,42,99,0.3);
 }
+
+.kanban-board { display:flex; gap:12px; overflow-x:auto; padding-bottom:10px; margin-bottom:16px; -webkit-overflow-scrolling:touch; }
+.kanban-col {
+  flex:0 0 248px; display:flex; flex-direction:column; background:var(--paper-alt); border:1px solid var(--line);
+  border-radius:12px; padding:10px;
+}
+.kanban-col-header {
+  display:flex; align-items:center; justify-content:space-between; padding:2px 4px 10px;
+  font-size:12.5px; font-weight:700; color:var(--ink); font-family:'IBM Plex Sans',sans-serif;
+}
+.kanban-col-count {
+  font-size:11px; color:var(--ink-soft); background:var(--surface); border:1px solid var(--line);
+  padding:1px 8px; border-radius:999px;
+}
+.kanban-col-list { display:flex; flex-direction:column; gap:8px; min-height:70px; }
+.kanban-empty { font-size:11.5px; color:var(--ink-soft); font-style:italic; text-align:center; padding:20px 6px; }
+.kanban-card {
+  background:var(--surface); border:1px solid var(--line); border-left:4px solid; border-radius:8px; padding:9px 10px;
+  cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none;
+  transition: box-shadow .15s ease; animation: fadeInUp 0.3s ease both;
+}
+.kanban-card.dragging { cursor:grabbing; box-shadow:0 14px 30px rgba(0,0,0,0.22); z-index:100; position:relative; }
+.kanban-card-nome { font-family:'Fraunces',serif; font-weight:600; font-size:13.5px; color:var(--ink); }
+.kanban-card-produto { font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+.kanban-card-valor { font-size:11.5px; color:var(--gold); font-weight:600; margin-top:4px; }
 
 .list { display:flex; flex-direction:column; gap:12px; }
 .card {
