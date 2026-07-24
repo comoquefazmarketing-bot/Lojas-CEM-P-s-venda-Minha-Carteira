@@ -30,7 +30,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isLoginPage = path.startsWith('/login');
+  const isLoginPage = path.startsWith('/login') || path.startsWith('/cadastro');
   const isCarteira = path.startsWith('/carteira');
 
   if (!user && isCarteira) {

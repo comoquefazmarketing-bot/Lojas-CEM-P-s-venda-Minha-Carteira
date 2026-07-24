@@ -71,6 +71,9 @@ export default function LoginForm() {
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
+        <button type="button" className="auth-link-btn" onClick={() => router.push('/cadastro')}>
+          Ainda não tem conta? Criar conta
+        </button>
       </div>
     </div>
   );

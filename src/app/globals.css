@@ -305,6 +305,13 @@ body::before {
 .auth-btn:hover { filter: brightness(1.06); transform: translateY(-1px); box-shadow: 0 10px 24px rgba(242,96,12,0.45); }
 .auth-btn:active { transform: translateY(0) scale(0.98); }
 .auth-btn:disabled { opacity: 0.6; cursor: default; transform: none; }
+.auth-link-btn {
+  width: 100%; background: none; border: none; color: var(--ink-soft); font-size: 12.5px;
+  text-align: center; margin-top: 14px; cursor: pointer; text-decoration: underline;
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+.auth-link-btn:hover { color: var(--gold); }
+.auth-sucesso-texto { color: var(--ink-soft); font-size: 14px; margin-bottom: 18px; }
 
 /* ---------- App shell ---------- */
 .carteira-app {
