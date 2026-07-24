@@ -362,7 +362,13 @@ body::before {
 
 .tendencia-chart-wrap { overflow-x:auto; overflow-y:hidden; margin:0 -4px; padding:0 4px; }
 .tendencia-bars { display:flex; align-items:flex-end; gap:5px; width:max-content; min-width:100%; }
-.tendencia-bar-col { display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; width:36px; flex-shrink:0; }
+.tendencia-bar-col {
+  display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; width:36px; flex-shrink:0;
+  background:none; border:none; padding:0; font-family:inherit; border-radius:6px;
+}
+.tendencia-bar-col:not(:disabled) { cursor:pointer; }
+.tendencia-bar-col:not(:disabled):hover { background: var(--pastel-gold); }
+.tendencia-bar-col.selecionado { background: var(--pastel-gold); box-shadow: 0 0 0 1.5px var(--gold) inset; }
 .tendencia-bar-valor { font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:var(--ink-soft); white-space:nowrap; margin-bottom:3px; line-height:1; }
 .tendencia-bar-col.peak .tendencia-bar-valor { color: var(--gold); font-weight:700; }
 .tendencia-bar {
@@ -380,7 +386,25 @@ body::before {
 .tendencia-eixo-sem { font-size:8.5px; color: var(--ink-soft); opacity:0.65; text-transform:uppercase; letter-spacing:0.3px; }
 .tendencia-eixo-item.melhor .tendencia-eixo-dia { color: var(--gold); font-weight:700; }
 .tendencia-eixo-item.melhor .tendencia-eixo-sem { color: var(--gold); opacity:1; }
+.tendencia-eixo-item.selecionado .tendencia-eixo-dia { color: var(--gold); font-weight:700; }
 .tendencia-melhor-dia { font-size:12px; color: var(--gold); font-weight:600; margin-top:10px; }
+
+.tendencia-dia-detalhe {
+  margin-top:12px; padding:10px 12px; background:var(--paper-alt); border:1px solid var(--line); border-radius:10px;
+  animation: fadeInUp 0.25s ease both;
+}
+.tendencia-dia-detalhe-header {
+  display:flex; align-items:center; justify-content:space-between; font-size:12px; font-weight:600; color:var(--ink);
+  margin-bottom:8px;
+}
+.tendencia-dia-detalhe-header button { background:none; border:none; color:var(--ink-soft); cursor:pointer; display:flex; padding:2px; }
+.tendencia-dia-detalhe-header button:hover { color: var(--rust); }
+.tendencia-dia-vazio { font-size:12px; color:var(--ink-soft); font-style:italic; }
+.tendencia-dia-item { display:flex; align-items:center; gap:8px; font-size:12.5px; padding:5px 0; border-bottom:1px solid var(--line); }
+.tendencia-dia-item:last-child { border-bottom:none; }
+.tendencia-dia-nome { font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:34%; }
+.tendencia-dia-produto { flex:1; min-width:0; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tendencia-dia-valor { color:var(--gold); font-weight:600; flex-shrink:0; }
 
 .produtos-ranking { display:flex; flex-direction:column; gap:11px; margin-top:6px; }
 .produto-rank-row { display:flex; align-items:center; gap:10px; }

@@ -372,7 +372,13 @@ function formatCompactBRL(v: number) {
   return String(Math.round(v));
 }
 
-function TendenciaChart({ data }: { data: { iso: string; valor: number }[] }) {
+function TendenciaChart({
+  data, diaSelecionado, onDayClick,
+}: {
+  data: { iso: string; valor: number }[];
+  diaSelecionado: string | null;
+  onDayClick: (iso: string) => void;
+}) {
   const trackHeight = 96;
   const max = Math.max(1, ...data.map(d => d.valor));
   const maiorValor = Math.max(0, ...data.map(d => d.valor));
@@ -385,20 +391,28 @@ function TendenciaChart({ data }: { data: { iso: string; valor: number }[] }) {
         {data.map((d, i) => {
           const barH = d.valor > 0 ? Math.max(4, Math.round((d.valor / max) * trackHeight)) : 2;
           const isPeak = i === melhorIdx;
+          const clicavel = d.valor > 0;
+          const isSelecionado = d.iso === diaSelecionado;
           return (
-            <div key={d.iso} className={`tendencia-bar-col ${isPeak ? 'peak' : ''}`}>
+            <button
+              key={d.iso}
+              type="button"
+              disabled={!clicavel}
+              className={`tendencia-bar-col ${isPeak ? 'peak' : ''} ${isSelecionado ? 'selecionado' : ''}`}
+              onClick={() => onDayClick(d.iso)}
+            >
               <span className="tendencia-bar-valor">{formatCompactBRL(d.valor)}</span>
               <div
                 className={`tendencia-bar ${isPeak ? 'peak' : ''} ${i === hojeIdx ? 'hoje' : ''} ${d.valor === 0 ? 'vazio' : ''}`}
                 style={{ height: barH }}
               />
-            </div>
+            </button>
           );
         })}
       </div>
       <div className="tendencia-eixo">
         {data.map((d, i) => (
-          <div key={d.iso} className={`tendencia-eixo-item ${i === melhorIdx ? 'melhor' : ''}`}>
+          <div key={d.iso} className={`tendencia-eixo-item ${i === melhorIdx ? 'melhor' : ''} ${d.iso === diaSelecionado ? 'selecionado' : ''}`}>
             <span className="tendencia-eixo-dia">{d.iso.slice(8, 10)}</span>
             <span className="tendencia-eixo-sem">{weekdayAbbrev(d.iso)}</span>
           </div>
@@ -651,6 +665,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [produtosOpen, setProdutosOpen] = useState(true);
   const [funilOpen, setFunilOpen] = useState(true);
   const [incompletosOpen, setIncompletosOpen] = useState(true);
+  const [diaSelecionado, setDiaSelecionado] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -1144,6 +1159,15 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     return maiorValor > 0 ? vendasUltimos14.find(d => d.valor === maiorValor) ?? null : null;
   }, [vendasUltimos14]);
 
+  const vendasDoDiaSelecionado = useMemo(() => {
+    if (!diaSelecionado) return [];
+    return enriched.filter(c => c.data_compra === diaSelecionado);
+  }, [enriched, diaSelecionado]);
+
+  function handleDayClick(iso: string) {
+    setDiaSelecionado(prev => (prev === iso ? null : iso));
+  }
+
   const produtosMaisVendidos = useMemo(() => {
     // conta ocorrências, não valor — uma venda com vários produtos não tem o preço de
     // cada item em separado, então "quanto vendeu de cada" seria uma estimativa falsa
@@ -1571,7 +1595,26 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                   </span>
                 )}
               </div>
-              <TendenciaChart data={vendasUltimos14} />
+              <TendenciaChart data={vendasUltimos14} diaSelecionado={diaSelecionado} onDayClick={handleDayClick} />
+              {diaSelecionado && (
+                <div className="tendencia-dia-detalhe">
+                  <div className="tendencia-dia-detalhe-header">
+                    <span>Vendas de {weekdayAbbrev(diaSelecionado)} {diaSelecionado.slice(8, 10)}/{diaSelecionado.slice(5, 7)}</span>
+                    <button type="button" onClick={() => setDiaSelecionado(null)}><X size={14} /></button>
+                  </div>
+                  {vendasDoDiaSelecionado.length === 0 ? (
+                    <div className="tendencia-dia-vazio">Nenhuma venda registrada nesse dia.</div>
+                  ) : (
+                    vendasDoDiaSelecionado.map(c => (
+                      <div key={c.id} className="tendencia-dia-item">
+                        <span className="tendencia-dia-nome">{c.nome}</span>
+                        <span className="tendencia-dia-produto">{c.produto || '—'}</span>
+                        <span className="tendencia-dia-valor mono">{formatBRL(c.valor_total)}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
               {melhorDiaPeriodo && (
                 <div className="tendencia-melhor-dia">
                   🏆 melhor dia: {weekdayAbbrev(melhorDiaPeriodo.iso)} {melhorDiaPeriodo.iso.slice(8, 10)}/{melhorDiaPeriodo.iso.slice(5, 7)} — {formatBRL(melhorDiaPeriodo.valor)}
