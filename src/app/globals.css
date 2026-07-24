@@ -837,6 +837,22 @@ body::before {
 .historico-del:hover { color:var(--rust); }
 .historico-nota { font-size:12.5px; color:var(--ink); white-space:pre-wrap; word-break:break-word; }
 
+.jarbas-btn { background: linear-gradient(100deg, var(--slate), #4a6a8a); color:white; border-color:transparent; }
+.jarbas-btn:hover { filter: brightness(1.1); color:white; }
+.jarbas-modal { display:flex; flex-direction:column; max-height:85vh; }
+.jarbas-messages { display:flex; flex-direction:column; gap:10px; overflow-y:auto; flex:1; padding:4px 2px 12px; min-height:180px; }
+.jarbas-empty { text-align:center; color:var(--ink-soft); font-size:13px; padding:36px 12px; line-height:1.5; }
+.jarbas-msg { max-width:85%; padding:9px 12px; border-radius:14px; font-size:13.5px; line-height:1.45; white-space:pre-wrap; word-break:break-word; }
+.jarbas-msg.user { align-self:flex-end; background:linear-gradient(100deg, var(--gold), var(--gold-soft)); color:white; border-bottom-right-radius:4px; }
+.jarbas-msg.assistant { align-self:flex-start; background:var(--paper-alt); color:var(--ink); border-bottom-left-radius:4px; }
+.jarbas-loading { align-self:flex-start; color:var(--ink-soft); font-size:12.5px; font-style:italic; padding:2px 4px; }
+.jarbas-input-row { display:flex; gap:8px; margin-top:10px; align-items:flex-end; }
+.jarbas-input-row textarea {
+  flex:1; border:1px solid var(--line); border-radius:10px; padding:9px 12px; font-size:13.5px;
+  font-family:'IBM Plex Sans',sans-serif; background:var(--surface); color:var(--ink); resize:none; min-height:42px; max-height:110px;
+}
+.jarbas-send-btn { flex:0 0 auto; padding:0 16px; min-height:42px; }
+
 .modal-actions { display:flex; gap:10px; margin-top:18px; }
 .btn { flex:1; padding:11px; border-radius:9px; font-weight:600; font-size:14px; cursor:pointer; border:1px solid var(--line); font-family:'IBM Plex Sans',sans-serif; transition: transform .15s ease, box-shadow .15s ease, filter .15s ease, background .15s ease; }
 .btn.primary { background:linear-gradient(100deg, var(--gold), var(--gold-soft)); color:white; border-color:transparent; box-shadow: 0 8px 20px rgba(242,96,12,0.3); }

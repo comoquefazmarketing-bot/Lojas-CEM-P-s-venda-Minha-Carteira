@@ -9,7 +9,7 @@ import {
   Snowflake, Star, Target, Check, Gift, Repeat, Handshake,
   ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins, ClipboardList, Bell, Rocket,
   ListChecks, Activity, BarChart3, PhoneOff, MapPin, BadgePercent, ShoppingBag, Funnel, Sun, Moon,
-  KanbanSquare, List,
+  KanbanSquare, List, Bot, Send,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao } from '@/types';
@@ -654,6 +654,10 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [viewMode, setViewMode] = useState<'lista' | 'kanban'>('lista');
+  const [jarbasOpen, setJarbasOpen] = useState(false);
+  const [jarbasMessages, setJarbasMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [jarbasInput, setJarbasInput] = useState('');
+  const [jarbasLoading, setJarbasLoading] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
@@ -872,6 +876,32 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     if (error) { showToast('Erro ao mover cliente'); return; }
     showToast(`${cliente.nome} → ${STATUS[novoStatus].label}`);
     loadClients({ silent: true });
+  }
+
+  async function sendJarbasMessage() {
+    const texto = jarbasInput.trim();
+    if (!texto || jarbasLoading) return;
+    const novasMensagens: { role: 'user' | 'assistant'; content: string }[] = [...jarbasMessages, { role: 'user', content: texto }];
+    setJarbasMessages(novasMensagens);
+    setJarbasInput('');
+    setJarbasLoading(true);
+    try {
+      const res = await fetch('/api/jarbas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: novasMensagens }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || data.error) {
+        setJarbasMessages(prev => [...prev, { role: 'assistant', content: data?.error || 'Não consegui responder agora. Tenta de novo.' }]);
+      } else {
+        setJarbasMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+      }
+    } catch {
+      setJarbasMessages(prev => [...prev, { role: 'assistant', content: 'Não consegui me conectar. Confere sua internet e tenta de novo.' }]);
+    } finally {
+      setJarbasLoading(false);
+    }
   }
 
   async function handleSaveMeta() {
@@ -1332,6 +1362,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
               <div className="subtitle">{userEmail} · {stats.total} cliente{stats.total !== 1 ? 's' : ''}</div>
             </div>
             <div className="header-actions">
+              <button className="backup-btn jarbas-btn" onClick={() => setJarbasOpen(true)}><Bot size={13} /> Jarbas</button>
               <button className="backup-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}>
                 {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
               </button>
@@ -2045,6 +2076,39 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
 
                 <div className="modal-actions">
                   <button type="button" className="btn ghost" onClick={() => setRelatorioOpen(false)}>Fechar</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {jarbasOpen && (
+            <div className="modal-overlay" onClick={() => setJarbasOpen(false)}>
+              <div className="modal jarbas-modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                  <span className="modal-title"><Bot size={18} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />Jarbas</span>
+                  <button type="button" className="close-btn" onClick={() => setJarbasOpen(false)}><X size={20} /></button>
+                </div>
+                <div className="jarbas-messages">
+                  {jarbasMessages.length === 0 && (
+                    <div className="jarbas-empty">
+                      Pergunta como estão suas vendas, quem priorizar hoje, ou peça uma estratégia pra bater a meta.
+                    </div>
+                  )}
+                  {jarbasMessages.map((m, i) => (
+                    <div key={i} className={`jarbas-msg ${m.role}`}>{m.content}</div>
+                  ))}
+                  {jarbasLoading && <div className="jarbas-loading">Jarbas está pensando...</div>}
+                </div>
+                <div className="jarbas-input-row">
+                  <textarea
+                    value={jarbasInput}
+                    onChange={e => setJarbasInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendJarbasMessage(); } }}
+                    placeholder="Pergunte algo pro Jarbas..."
+                  />
+                  <button type="button" className="btn primary jarbas-send-btn" onClick={sendJarbasMessage} disabled={jarbasLoading || !jarbasInput.trim()}>
+                    <Send size={16} />
+                  </button>
                 </div>
               </div>
             </div>
