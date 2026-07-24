@@ -12,6 +12,7 @@ import {
   KanbanSquare, List, Bot, Send,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { gerarRespostaJarbas, type JarbasContexto } from '@/lib/jarbas';
 import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao } from '@/types';
 
 /* ---------------------------------- utils ---------------------------------- */
@@ -878,30 +879,32 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     loadClients({ silent: true });
   }
 
-  async function sendJarbasMessage() {
+  function sendJarbasMessage() {
     const texto = jarbasInput.trim();
     if (!texto || jarbasLoading) return;
-    const novasMensagens: { role: 'user' | 'assistant'; content: string }[] = [...jarbasMessages, { role: 'user', content: texto }];
-    setJarbasMessages(novasMensagens);
+    setJarbasMessages(prev => [...prev, { role: 'user', content: texto }]);
     setJarbasInput('');
     setJarbasLoading(true);
-    try {
-      const res = await fetch('/api/jarbas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: novasMensagens }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data || data.error) {
-        setJarbasMessages(prev => [...prev, { role: 'assistant', content: data?.error || 'Não consegui responder agora. Tenta de novo.' }]);
-      } else {
-        setJarbasMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
-      }
-    } catch {
-      setJarbasMessages(prev => [...prev, { role: 'assistant', content: 'Não consegui me conectar. Confere sua internet e tenta de novo.' }]);
-    } finally {
+
+    const contexto: JarbasContexto = {
+      metaMensal,
+      vendasMes,
+      valorRestante: metaCalc.valorRestante,
+      diasRestantes: metaCalc.diasRestantes,
+      atrasados: stats.atrasados,
+      prospectsAbertos: conversao.aindaProspect,
+      convertidos: conversao.convertidos,
+      taxaConversao: conversao.taxa,
+      cicloMedio: conversao.cicloMedio,
+      prioridadesHoje: acaoDoDia.map(a => ({ nome: a.cliente.nome, motivo: a.motivo })),
+    };
+
+    // pequeno atraso só pra não parecer instantâneo/robótico — a resposta é local, sem API
+    setTimeout(() => {
+      const resposta = gerarRespostaJarbas(texto, contexto);
+      setJarbasMessages(prev => [...prev, { role: 'assistant', content: resposta }]);
       setJarbasLoading(false);
-    }
+    }, 350);
   }
 
   async function handleSaveMeta() {
@@ -2091,7 +2094,9 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                 <div className="jarbas-messages">
                   {jarbasMessages.length === 0 && (
                     <div className="jarbas-empty">
-                      Pergunta como estão suas vendas, quem priorizar hoje, ou peça uma estratégia pra bater a meta.
+                      Pergunta sobre: <strong>motivação</strong>, <strong>prioridades de hoje</strong>, sua <strong>meta</strong>,
+                      <strong> clientes atrasados</strong>, <strong>taxa de conversão</strong>, <strong>técnicas de fechamento</strong>,
+                      <strong> objeções</strong> ou o método <strong>APONTE</strong>.
                     </div>
                   )}
                   {jarbasMessages.map((m, i) => (
