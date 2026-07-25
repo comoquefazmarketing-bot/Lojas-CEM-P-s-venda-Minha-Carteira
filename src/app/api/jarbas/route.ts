@@ -102,7 +102,7 @@ export async function POST(request: Request) {
   const systemPrompt = `${SISTEMA_PROMPT_BASE}\n\nRESUMO DA CARTEIRA HOJE:\n${resumo}\n\nQUEM PRECISA DE ATENÇÃO HOJE:\n${prioridades}`;
 
   try {
-    const model = 'gemini-2.5-flash';
+    const model = 'gemini-flash-latest';
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
