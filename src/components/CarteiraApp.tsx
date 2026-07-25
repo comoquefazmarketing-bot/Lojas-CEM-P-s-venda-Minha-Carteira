@@ -894,10 +894,11 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     loadClients({ silent: true });
   }
 
-  function sendJarbasMessage() {
+  async function sendJarbasMessage() {
     const texto = jarbasInput.trim();
     if (!texto || jarbasLoading) return;
-    setJarbasMessages(prev => [...prev, { role: 'user', content: texto }]);
+    const historico = [...jarbasMessages, { role: 'user' as const, content: texto }];
+    setJarbasMessages(historico);
     setJarbasInput('');
     setJarbasLoading(true);
 
@@ -914,12 +915,32 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
       prioridadesHoje: acaoDoDia.map(a => ({ nome: a.cliente.nome, motivo: a.motivo })),
     };
 
-    // pequeno atraso só pra não parecer instantâneo/robótico — a resposta é local, sem API
-    setTimeout(() => {
-      const resposta = gerarRespostaJarbas(texto, contexto);
-      setJarbasMessages(prev => [...prev, { role: 'assistant', content: resposta }]);
+    // Tenta o Jarbas "de verdade" (Claude + dados reais da carteira). Se a API não
+    // estiver configurada ou falhar, cai pra base de conhecimento local (sem IA).
+    try {
+      let usouIA = false;
+      try {
+        const res = await fetch('/api/jarbas', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ messages: historico }),
+        });
+        const data = await res.json().catch(() => null);
+        if (res.ok && data?.reply) {
+          setJarbasMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+          usouIA = true;
+        }
+      } catch {
+        // segue pro fallback local abaixo
+      }
+
+      if (!usouIA) {
+        const resposta = gerarRespostaJarbas(texto, contexto);
+        setJarbasMessages(prev => [...prev, { role: 'assistant', content: resposta }]);
+      }
+    } finally {
       setJarbasLoading(false);
-    }, 350);
+    }
   }
 
   async function handleSaveMeta() {
