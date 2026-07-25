@@ -80,9 +80,9 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new Response('Não autorizado', { status: 401 });
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.GEMINI_API_KEY) {
     return new Response(
-      JSON.stringify({ error: 'O Jarbas ainda não foi configurado — falta adicionar a chave da API da Anthropic.' }),
+      JSON.stringify({ error: 'O Jarbas ainda não foi configurado — falta adicionar a chave da API do Gemini.' }),
       { status: 500, headers: { 'content-type': 'application/json' } }
     );
   }
@@ -102,20 +102,22 @@ export async function POST(request: Request) {
   const systemPrompt = `${SISTEMA_PROMPT_BASE}\n\nRESUMO DA CARTEIRA HOJE:\n${resumo}\n\nQUEM PRECISA DE ATENÇÃO HOJE:\n${prioridades}`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-5',
-        max_tokens: 700,
-        system: systemPrompt,
-        messages: messages.map((m: { role: string; content: string }) => ({ role: m.role, content: m.content })),
-      }),
-    });
+    const model = 'gemini-2.5-flash';
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: messages.map((m: { role: string; content: string }) => ({
+            role: m.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: m.content }],
+          })),
+          generationConfig: { maxOutputTokens: 700 },
+        }),
+      }
+    );
 
     if (!res.ok) {
       return new Response(JSON.stringify({ error: 'Não consegui falar com o Jarbas agora. Tenta de novo em instantes.' }), {
@@ -124,7 +126,7 @@ export async function POST(request: Request) {
     }
 
     const data = await res.json();
-    const reply = data?.content?.[0]?.text ?? 'Não consegui pensar em uma resposta agora.';
+    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Não consegui pensar em uma resposta agora.';
     return new Response(JSON.stringify({ reply }), { status: 200, headers: { 'content-type': 'application/json' } });
   } catch {
     return new Response(JSON.stringify({ error: 'Não consegui me conectar com o Jarbas.' }), {
