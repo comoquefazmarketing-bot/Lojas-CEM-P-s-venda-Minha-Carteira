@@ -70,17 +70,30 @@ export async function POST(request: Request) {
     }
 
     const data = await res.json();
-    const texto = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
+    const texto = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const finishReason = data?.candidates?.[0]?.finishReason ?? null;
+    const blockReason = data?.promptFeedback?.blockReason ?? null;
     let produto = '';
     let observacoes = '';
+    let parseFalhou = false;
     try {
-      const parsed = JSON.parse(texto);
+      const parsed = JSON.parse(texto || '{}');
       produto = (parsed?.produto ?? '').trim();
       observacoes = (parsed?.observacoes ?? '').trim();
     } catch {
-      // resposta fora do formato esperado — segue com campos vazios, sem quebrar o cadastro
+      parseFalhou = true;
     }
-    return new Response(JSON.stringify({ produto, observacoes }), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (!produto && !observacoes) {
+      console.error('Análise de oferta: veio vazio', { finishReason, blockReason, parseFalhou, texto: texto.slice(0, 500) });
+    }
+    return new Response(
+      JSON.stringify({
+        produto,
+        observacoes,
+        ...((!produto && !observacoes) ? { debug: { finishReason, blockReason, parseFalhou, textoBruto: texto.slice(0, 500) } } : {}),
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } }
+    );
   } catch {
     return new Response(JSON.stringify({ error: 'Não consegui analisar a imagem agora.' }), {
       status: 500, headers: { 'content-type': 'application/json' },
