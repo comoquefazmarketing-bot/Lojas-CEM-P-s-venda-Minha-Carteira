@@ -47,7 +47,8 @@ export interface Oferta {
   id: string;
   user_id?: string;
   produto: string;
-  link: string;
+  link: string | null;
+  imagem_url: string | null;
   observacoes: string | null;
   criado_em?: string;
 }

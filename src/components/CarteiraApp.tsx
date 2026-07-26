@@ -726,12 +726,16 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [novaOfertaProduto, setNovaOfertaProduto] = useState('');
   const [novaOfertaLink, setNovaOfertaLink] = useState('');
   const [novaOfertaObs, setNovaOfertaObs] = useState('');
+  const [novaOfertaImagem, setNovaOfertaImagem] = useState<File | null>(null);
+  const [enviandoOferta, setEnviandoOferta] = useState(false);
+  const [analisandoImagemOferta, setAnalisandoImagemOferta] = useState(false);
   const [ofertaClienteEscolhido, setOfertaClienteEscolhido] = useState<Record<string, string>>({});
   const [ofertaExpandida, setOfertaExpandida] = useState<string | null>(null);
   const [editandoOfertaId, setEditandoOfertaId] = useState<string | null>(null);
   const [editOfertaProduto, setEditOfertaProduto] = useState('');
   const [editOfertaLink, setEditOfertaLink] = useState('');
   const [editOfertaObs, setEditOfertaObs] = useState('');
+  const [editOfertaImagem, setEditOfertaImagem] = useState<File | null>(null);
 
   const algumModalAberto = formOpen || !!confirmDelete || relatorioOpen || jarbasOpen || !!confirmMerge;
   useEffect(() => {
@@ -882,15 +886,59 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   }, [supabase]);
   useEffect(() => { loadOfertas(); }, [loadOfertas]);
 
+  async function uploadOfertaImagem(file: File): Promise<string | null> {
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage.from('ofertas').upload(path, file);
+    if (error) { showToast('Não consegui enviar a imagem'); return null; }
+    return supabase.storage.from('ofertas').getPublicUrl(path).data.publicUrl;
+  }
+
+  function fileParaBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(',')[1] ?? '');
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleNovaOfertaImagem(file: File | null) {
+    setNovaOfertaImagem(file);
+    if (!file || novaOfertaProduto.trim()) return;
+    setAnalisandoImagemOferta(true);
+    try {
+      const imagemBase64 = await fileParaBase64(file);
+      const res = await fetch('/api/ofertas/analisar-imagem', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ imagemBase64, mimeType: file.type }),
+      });
+      const data = await res.json();
+      if (data?.produto && data.produto !== 'Produto não identificado') setNovaOfertaProduto(data.produto);
+    } catch {
+      // silencioso — o vendedor sempre pode digitar o produto na mão
+    } finally {
+      setAnalisandoImagemOferta(false);
+    }
+  }
+
   async function handleAddOferta() {
-    if (!novaOfertaProduto.trim() || !novaOfertaLink.trim()) { showToast('Preenche produto e link'); return; }
+    if (!novaOfertaProduto.trim() || (!novaOfertaLink.trim() && !novaOfertaImagem)) {
+      showToast('Preenche o produto e o link ou a arte'); return;
+    }
+    setEnviandoOferta(true);
+    const imagemUrl = novaOfertaImagem ? await uploadOfertaImagem(novaOfertaImagem) : null;
+    if (novaOfertaImagem && !imagemUrl) { setEnviandoOferta(false); return; }
     const { error } = await supabase.from('ofertas').insert({
       produto: novaOfertaProduto.trim(),
-      link: novaOfertaLink.trim(),
+      link: novaOfertaLink.trim() || null,
+      imagem_url: imagemUrl,
       observacoes: novaOfertaObs.trim() || null,
     });
+    setEnviandoOferta(false);
     if (error) { showToast('Não consegui salvar a oferta'); return; }
-    setNovaOfertaProduto(''); setNovaOfertaLink(''); setNovaOfertaObs('');
+    setNovaOfertaProduto(''); setNovaOfertaLink(''); setNovaOfertaObs(''); setNovaOfertaImagem(null);
     showToast('Oferta adicionada');
     loadOfertas();
   }
@@ -904,21 +952,29 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   function handleStartEditOferta(oferta: Oferta) {
     setEditandoOfertaId(oferta.id);
     setEditOfertaProduto(oferta.produto);
-    setEditOfertaLink(oferta.link);
+    setEditOfertaLink(oferta.link || '');
     setEditOfertaObs(oferta.observacoes || '');
+    setEditOfertaImagem(null);
   }
 
   function handleCancelEditOferta() {
     setEditandoOfertaId(null);
   }
 
-  async function handleSaveEditOferta(id: string) {
-    if (!editOfertaProduto.trim() || !editOfertaLink.trim()) { showToast('Preenche produto e link'); return; }
+  async function handleSaveEditOferta(id: string, imagemAtual: string | null) {
+    if (!editOfertaProduto.trim() || (!editOfertaLink.trim() && !imagemAtual && !editOfertaImagem)) {
+      showToast('Preenche o produto e o link ou a arte'); return;
+    }
+    setEnviandoOferta(true);
+    const imagemUrl = editOfertaImagem ? await uploadOfertaImagem(editOfertaImagem) : imagemAtual;
+    if (editOfertaImagem && !imagemUrl) { setEnviandoOferta(false); return; }
     const { error } = await supabase.from('ofertas').update({
       produto: editOfertaProduto.trim(),
-      link: editOfertaLink.trim(),
+      link: editOfertaLink.trim() || null,
+      imagem_url: imagemUrl,
       observacoes: editOfertaObs.trim() || null,
     }).eq('id', id);
+    setEnviandoOferta(false);
     if (error) { showToast('Não consegui salvar a oferta'); return; }
     setEditandoOfertaId(null);
     loadOfertas();
@@ -936,7 +992,8 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   }
 
   function enviarOfertaWhatsApp(oferta: Oferta, cliente: Cliente) {
-    const texto = `Oi ${cliente.nome}! Vi essa oferta e lembrei de você: ${oferta.link}${oferta.observacoes ? `\n${oferta.observacoes}` : ''}\n\nQuer que eu reserve?`;
+    const linkParaMandar = oferta.link || oferta.imagem_url || '';
+    const texto = `Oi ${cliente.nome}! Vi essa oferta e lembrei de você: ${linkParaMandar}${oferta.observacoes ? `\n${oferta.observacoes}` : ''}\n\nQuer que eu reserve?`;
     window.open(waLinkWithText(cliente.telefone, texto), '_blank');
   }
 
@@ -1965,7 +2022,18 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                     value={novaOfertaObs}
                     onChange={e => setNovaOfertaObs(e.target.value)}
                   />
-                  <button type="button" className="btn primary" onClick={handleAddOferta}>Adicionar oferta</button>
+                  <label className="oferta-file-label">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="oferta-file-input"
+                      onChange={e => handleNovaOfertaImagem(e.target.files?.[0] || null)}
+                    />
+                    {analisandoImagemOferta ? 'Analisando imagem...' : (novaOfertaImagem ? novaOfertaImagem.name : 'Anexar arte (opcional)')}
+                  </label>
+                  <button type="button" className="btn primary" disabled={enviandoOferta} onClick={handleAddOferta}>
+                    {enviandoOferta ? 'Enviando...' : 'Adicionar oferta'}
+                  </button>
                 </div>
 
                 {ofertas.length === 0 ? (
@@ -1994,7 +2062,23 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                               value={editOfertaObs}
                               onChange={e => setEditOfertaObs(e.target.value)}
                             />
-                            <button type="button" className="btn primary" onClick={() => handleSaveEditOferta(oferta.id)}>Salvar</button>
+                            <label className="oferta-file-label">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="oferta-file-input"
+                                onChange={e => setEditOfertaImagem(e.target.files?.[0] || null)}
+                              />
+                              {editOfertaImagem ? editOfertaImagem.name : (oferta.imagem_url ? 'Trocar arte' : 'Anexar arte (opcional)')}
+                            </label>
+                            <button
+                              type="button"
+                              className="btn primary"
+                              disabled={enviandoOferta}
+                              onClick={() => handleSaveEditOferta(oferta.id, oferta.imagem_url)}
+                            >
+                              {enviandoOferta ? 'Salvando...' : 'Salvar'}
+                            </button>
                             <button type="button" className="btn" onClick={handleCancelEditOferta}>Cancelar</button>
                           </div>
                         </div>
@@ -2003,18 +2087,30 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                     return (
                       <div key={oferta.id} className="oferta-card">
                         <div className="oferta-card-header" onClick={() => setOfertaExpandida(expandida ? null : oferta.id)}>
-                          <div>
-                            <div className="oferta-produto">{oferta.produto}</div>
-                            <a
-                              href={oferta.link}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="oferta-link"
-                              onClick={e => e.stopPropagation()}
-                            >
-                              Ver no Instagram
-                            </a>
-                            {oferta.observacoes && <div className="oferta-obs">{oferta.observacoes}</div>}
+                          <div className="oferta-card-main">
+                            {oferta.imagem_url && (
+                              <img
+                                src={oferta.imagem_url}
+                                alt={oferta.produto}
+                                className="oferta-thumb"
+                                onClick={e => { e.stopPropagation(); window.open(oferta.imagem_url!, '_blank'); }}
+                              />
+                            )}
+                            <div>
+                              <div className="oferta-produto">{oferta.produto}</div>
+                              {oferta.link && (
+                                <a
+                                  href={oferta.link}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="oferta-link"
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  Ver no Instagram
+                                </a>
+                              )}
+                              {oferta.observacoes && <div className="oferta-obs">{oferta.observacoes}</div>}
+                            </div>
                           </div>
                           <div className="oferta-card-actions">
                             <span className="usuario-badge">{compativeis.length} compatível{compativeis.length !== 1 ? 'eis' : ''}</span>
