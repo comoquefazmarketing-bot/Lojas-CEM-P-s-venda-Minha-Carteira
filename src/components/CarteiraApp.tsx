@@ -670,7 +670,7 @@ function ClienteCard({
 
 /* ---------------------------------- App ---------------------------------- */
 
-export default function CarteiraApp({ userEmail }: { userEmail: string }) {
+export default function CarteiraApp({ userEmail, userNome }: { userEmail: string; userNome?: string }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
@@ -1818,7 +1818,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
               <img src="/logo-lojas-cem.png" alt="Lojas CEM" className="header-logo" />
               <div className="eyebrow">Lojas CEM · Pós-venda</div>
               <h1 className="title">Minha Carteira</h1>
-              <div className="subtitle">{userEmail} · {stats.total} cliente{stats.total !== 1 ? 's' : ''}</div>
+              <div className="subtitle">{userNome || userEmail} · {stats.total} cliente{stats.total !== 1 ? 's' : ''}</div>
             </div>
             <div className="header-actions">
               <button className="backup-btn jarbas-btn" onClick={() => setJarbasOpen(true)}><Bot size={13} /> Jarbas</button>
@@ -2754,7 +2754,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                     <img src="/logo-lojas-cem.png" alt="Lojas CEM" className="relatorio-print-logo" />
                     <div>
                       <div className="relatorio-print-titulo">Relatório mensal — {monthLabel(relatorioMes)}</div>
-                      <div className="relatorio-print-sub">{userEmail} · gerado em {new Date().toLocaleDateString('pt-BR')}</div>
+                      <div className="relatorio-print-sub">{userNome || userEmail} · gerado em {new Date().toLocaleDateString('pt-BR')}</div>
                     </div>
                   </div>
 
