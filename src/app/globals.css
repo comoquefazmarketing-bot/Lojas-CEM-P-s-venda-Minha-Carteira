@@ -406,6 +406,21 @@ body::before {
 .tendencia-dia-produto { flex:1; min-width:0; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .tendencia-dia-valor { color:var(--gold); font-weight:600; flex-shrink:0; }
 
+.duplicados-lista { margin-top:12px; }
+.duplicados-hint { font-size:12px; color:var(--ink-soft); margin:0 0 10px; }
+.duplicado-item {
+  display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+  padding:8px 10px; border-radius:8px; background:var(--surface); border:1px solid var(--line); margin-bottom:6px;
+}
+.duplicado-info { display:flex; align-items:center; gap:6px; flex-wrap:wrap; min-width:0; font-size:12.5px; }
+.duplicado-nome { font-weight:600; color:var(--ink); }
+.duplicado-status { font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.3px; }
+.duplicado-actions { display:flex; gap:6px; flex-shrink:0; }
+.duplicado-btn { font-size:11.5px; padding:5px 10px; border-radius:999px; border:1px solid var(--line); background:var(--surface); color:var(--ink); cursor:pointer; }
+.duplicado-btn.ignore:hover { background:var(--paper-alt); }
+.duplicado-btn.merge { background:var(--gold); color:#fff; border-color:var(--gold); }
+.duplicado-btn.merge:hover { opacity:0.9; }
+
 .produtos-ranking { display:flex; flex-direction:column; gap:11px; margin-top:6px; }
 .produto-rank-row { display:flex; align-items:center; gap:10px; }
 .produto-rank-pos { font-family:'IBM Plex Mono',monospace; font-size:11px; color: var(--ink-soft); width:20px; flex-shrink:0; text-align:right; }
@@ -467,6 +482,7 @@ body::before {
 .tendencia-card:nth-of-type(1) { animation-delay: .1s; }
 .tendencia-card:nth-of-type(2) { animation-delay: .18s; }
 .tendencia-card:nth-of-type(3) { animation-delay: .26s; }
+.tendencia-card:nth-of-type(4) { animation-delay: .34s; }
 .stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg, var(--gold), var(--brand-yellow)); opacity:0.8; }
 .stat-card:hover { transform: translateY(-2px); box-shadow: 0 10px 22px var(--shadow-ambient); }
 .stat-num { font-family:'Fraunces', serif; font-weight:600; font-size:24px; line-height:1; display:inline-block; }
