@@ -4,11 +4,12 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
+  const nome = typeof body?.nome === 'string' ? body.nome.trim() : '';
   const email = typeof body?.email === 'string' ? body.email.trim() : '';
   const senha = typeof body?.senha === 'string' ? body.senha : '';
   const codigo = typeof body?.codigo === 'string' ? body.codigo : '';
 
-  if (!email || !senha || !codigo) {
+  if (!nome || !email || !senha || !codigo) {
     return new Response(JSON.stringify({ error: 'Preenche todos os campos.' }), {
       status: 400, headers: { 'content-type': 'application/json' },
     });
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
   if (created.user) {
     // não bloqueia o cadastro se isso falhar — só faz a pessoa ficar sem entrada
     // em profiles, o que a trata como vendedor comum (comportamento seguro por padrão)
-    await supabaseAdmin.from('profiles').insert({ user_id: created.user.id, email, role: 'vendedor' });
+    await supabaseAdmin.from('profiles').insert({ user_id: created.user.id, email, nome, role: 'vendedor' });
   }
 
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } });

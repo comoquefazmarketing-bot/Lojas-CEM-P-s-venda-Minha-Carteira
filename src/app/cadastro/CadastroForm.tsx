@@ -19,6 +19,7 @@ function ripple(e: React.MouseEvent<HTMLElement>) {
 
 export default function CadastroForm() {
   const router = useRouter();
+  const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [confirmar, setConfirmar] = useState('');
@@ -39,7 +40,7 @@ export default function CadastroForm() {
       const res = await fetch('/api/convite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, senha, codigo }),
+        body: JSON.stringify({ nome, email, senha, codigo }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.ok) {
@@ -79,8 +80,12 @@ export default function CadastroForm() {
         {error && <div className="auth-error">{error}</div>}
         <form onSubmit={handleSubmit}>
           <div className="auth-field">
+            <label>Nome</label>
+            <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} required autoFocus />
+          </div>
+          <div className="auth-field">
             <label>Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </div>
           <div className="auth-field">
             <label>Senha</label>

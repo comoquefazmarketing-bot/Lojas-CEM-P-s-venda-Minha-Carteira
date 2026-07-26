@@ -159,6 +159,21 @@ Storage).
   "Produto" ainda estiver vazio, então nunca sobrescreve o que você já digitou. Usa a mesma chave
   `GEMINI_API_KEY` já configurada pro Jarbas.
 
+## Novidades — Nome no perfil (em vez de só o email)
+
+Rode **`supabase/migration_v17_profiles_nome.sql`** no SQL Editor do Supabase (adiciona a coluna
+`nome` em `profiles`).
+
+- O cadastro (`/cadastro`) agora pede o nome da pessoa, além de email/senha/código.
+- Na visão do gerente (ranking de vendedores, lista "Usuários com acesso", dropdown de
+  transferência de carteira) e no topo da própria Carteira, mostra o nome em vez do email.
+- **Contas criadas antes dessa migração não têm nome salvo** — pra corrigir uma conta existente,
+  roda no SQL Editor (troca o email pelo da pessoa):
+  ```sql
+  update public.profiles set nome = 'Nome da Pessoa' where email = 'email@exemplo.com';
+  ```
+- Sem essa migração, tudo continua funcionando normal, só mostrando o email como já era antes.
+
 ## Estrutura
 
 ```

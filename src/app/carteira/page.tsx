@@ -11,11 +11,12 @@ export default async function CarteiraPage() {
 
   if (!user) redirect('/login');
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('user_id', user.id).maybeSingle();
+  const { data: profile } = await supabase.from('profiles').select('role, nome').eq('user_id', user.id).maybeSingle();
+  const userNome = profile?.nome || user.email || '';
 
   if (profile?.role === 'gerente') {
-    return <GerenteApp userEmail={user.email ?? ''} />;
+    return <GerenteApp userEmail={user.email ?? ''} userNome={userNome} />;
   }
 
-  return <CarteiraApp userEmail={user.email ?? ''} />;
+  return <CarteiraApp userEmail={user.email ?? ''} userNome={userNome} />;
 }

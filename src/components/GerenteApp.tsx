@@ -14,13 +14,13 @@ function formatBRL(v: number | null | undefined) {
 function monthKey(iso: string) { return iso.slice(0, 7); }
 function todayIso() { return new Date().toISOString().slice(0, 10); }
 
-type Profile = { user_id: string; email: string | null; role: string };
+type Profile = { user_id: string; email: string | null; nome: string | null; role: string };
 type Configuracao = { user_id: string; meta_mensal: number | null };
-type UsuarioGerencia = { user_id: string; email: string | null; role: string; ativo: boolean; criado_em: string };
+type UsuarioGerencia = { user_id: string; email: string | null; nome: string | null; role: string; ativo: boolean; criado_em: string };
 
 type VendedorResumo = {
   userId: string;
-  email: string;
+  nome: string;
   clientes: Cliente[];
   metaMensal: number | null;
   vendasMes: number;
@@ -29,7 +29,7 @@ type VendedorResumo = {
   pctMeta: number | null;
 };
 
-export default function GerenteApp({ userEmail }: { userEmail: string }) {
+export default function GerenteApp({ userEmail, userNome }: { userEmail: string; userNome?: string }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [loading, setLoading] = useState(true);
@@ -47,7 +47,7 @@ export default function GerenteApp({ userEmail }: { userEmail: string }) {
       setLoading(true);
       const [{ data: c }, { data: p }, { data: cfg }] = await Promise.all([
         supabase.from('clientes').select('*'),
-        supabase.from('profiles').select('user_id, email, role'),
+        supabase.from('profiles').select('user_id, email, nome, role'),
         supabase.from('configuracoes').select('user_id, meta_mensal'),
       ]);
       setClientes((c as Cliente[]) ?? []);
@@ -124,7 +124,7 @@ export default function GerenteApp({ userEmail }: { userEmail: string }) {
         const pctMeta = metaMensal ? Math.min(100, (vendasMes / metaMensal) * 100) : null;
         return {
           userId: p.user_id,
-          email: p.email || '(sem email)',
+          nome: p.nome || p.email || '(sem nome)',
           clientes: clientesDoVendedor,
           metaMensal,
           vendasMes,
@@ -159,7 +159,7 @@ export default function GerenteApp({ userEmail }: { userEmail: string }) {
           <img src="/logo-lojas-cem.png" alt="Lojas CEM" className="header-logo" />
           <div className="eyebrow">Lojas CEM · Painel Gerencial</div>
           <h1 className="title">Visão da Loja</h1>
-          <div className="subtitle">{userEmail} · {totais.qtdVendedores} vendedor{totais.qtdVendedores !== 1 ? 'es' : ''}</div>
+          <div className="subtitle">{userNome || userEmail} · {totais.qtdVendedores} vendedor{totais.qtdVendedores !== 1 ? 'es' : ''}</div>
         </div>
         <div className="header-actions">
           <button className="logout-btn" onClick={handleLogout}><LogOut size={13} /> Sair</button>
@@ -198,7 +198,7 @@ export default function GerenteApp({ userEmail }: { userEmail: string }) {
               <button type="button" className="gerente-vendedor-header" onClick={() => setExpandido(e => (e === v.userId ? null : v.userId))}>
                 <span className="gerente-vendedor-pos mono">{i + 1}º</span>
                 <div className="gerente-vendedor-info">
-                  <div className="gerente-vendedor-email">{v.email}</div>
+                  <div className="gerente-vendedor-email">{v.nome}</div>
                   <div className="gerente-vendedor-sub mono">
                     {formatBRL(v.vendasMes)}{v.metaMensal ? ` de ${formatBRL(v.metaMensal)}` : ''}
                     {v.atrasados > 0 && <span className="gerente-vendedor-alerta"> · {v.atrasados} atrasado{v.atrasados > 1 ? 's' : ''}</span>}
@@ -245,7 +245,7 @@ export default function GerenteApp({ userEmail }: { userEmail: string }) {
               usuarios.map(u => (
                 <div key={u.user_id} className="usuario-row">
                   <div className="usuario-info">
-                    <span className="usuario-email">{u.email || '(sem email)'}</span>
+                    <span className="usuario-email">{u.nome || u.email || '(sem nome)'}</span>
                     <span className={`usuario-badge ${u.role}`}>{u.role === 'gerente' ? 'Gerente' : 'Vendedor'}</span>
                     <span className={`usuario-badge ${u.ativo ? 'ativo' : 'inativo'}`}>{u.ativo ? 'Ativo' : 'Desativado'}</span>
                   </div>
@@ -257,7 +257,7 @@ export default function GerenteApp({ userEmail }: { userEmail: string }) {
                     >
                       <option value="">Transferir carteira pra...</option>
                       {usuarios.filter(o => o.user_id !== u.user_id).map(o => (
-                        <option key={o.user_id} value={o.user_id}>{o.email}</option>
+                        <option key={o.user_id} value={o.user_id}>{o.nome || o.email}</option>
                       ))}
                     </select>
                     <button

@@ -9,7 +9,7 @@ export async function GET() {
   const supabaseAdmin = adminClient();
   const { data, error } = await supabaseAdmin
     .from('profiles')
-    .select('user_id, email, role, ativo, criado_em')
+    .select('user_id, email, nome, role, ativo, criado_em')
     .order('criado_em', { ascending: true });
   if (error) return new Response('Erro ao buscar usuários', { status: 500 });
 
