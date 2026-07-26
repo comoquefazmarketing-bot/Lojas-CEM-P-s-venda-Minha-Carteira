@@ -174,6 +174,21 @@ Rode **`supabase/migration_v17_profiles_nome.sql`** no SQL Editor do Supabase (a
   ```
 - Sem essa migração, tudo continua funcionando normal, só mostrando o email como já era antes.
 
+## Novidades — Meta da loja e indicadores completos por vendedor
+
+Rode **`supabase/migration_v18_meta_loja_indicadores.sql`** no SQL Editor do Supabase (cria a
+tabela `meta_loja` e libera o gerente ler interações/histórico de meta de todo mundo).
+
+- O painel do gerente agora tem uma **meta da loja** (ex: R$ 1.800.000/mês), editável clicando em
+  "Definir meta"/"Editar" — igual ao card de meta do vendedor.
+- Cada vendedor no ranking mostra quanto **% da meta da loja** ele está contribuindo, além da
+  própria meta individual.
+- Expandindo um vendedor, aparecem os indicadores: prospects ativos, conversões no mês (+ taxa de
+  conversão histórica), interações de pós-venda registradas no mês, follow-ups vencidos, e em
+  quantos dias bateu a meta esse mês (quando aplicável).
+- Sem essa migração, o painel do gerente continua funcionando normal, só sem a meta da loja e sem
+  os indicadores de interação/histórico de meta (ficam sempre zerados).
+
 ## Estrutura
 
 ```
