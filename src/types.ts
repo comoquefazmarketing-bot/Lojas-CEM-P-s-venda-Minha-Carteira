@@ -43,6 +43,15 @@ export interface MetaHistorico {
   criado_em?: string;
 }
 
+export interface Oferta {
+  id: string;
+  user_id?: string;
+  produto: string;
+  link: string;
+  observacoes: string | null;
+  criado_em?: string;
+}
+
 export interface Lembrete {
   id: string;
   user_id?: string;

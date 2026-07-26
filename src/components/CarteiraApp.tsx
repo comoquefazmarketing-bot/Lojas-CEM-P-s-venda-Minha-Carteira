@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { gerarRespostaJarbas, type JarbasContexto } from '@/lib/jarbas';
-import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao, Lembrete, MetaHistorico } from '@/types';
+import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao, Lembrete, MetaHistorico, Oferta } from '@/types';
 
 /* ---------------------------------- utils ---------------------------------- */
 
@@ -721,6 +721,13 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [lembretesDevidos, setLembretesDevidos] = useState<Lembrete[]>([]);
   const [salvandoLembreteIdx, setSalvandoLembreteIdx] = useState<number | null>(null);
   const [lembreteDataHoraInput, setLembreteDataHoraInput] = useState('');
+  const [ofertas, setOfertas] = useState<Oferta[]>([]);
+  const [ofertasOpen, setOfertasOpen] = useState(true);
+  const [novaOfertaProduto, setNovaOfertaProduto] = useState('');
+  const [novaOfertaLink, setNovaOfertaLink] = useState('');
+  const [novaOfertaObs, setNovaOfertaObs] = useState('');
+  const [ofertaClienteEscolhido, setOfertaClienteEscolhido] = useState<Record<string, string>>({});
+  const [ofertaExpandida, setOfertaExpandida] = useState<string | null>(null);
 
   const algumModalAberto = formOpen || !!confirmDelete || relatorioOpen || jarbasOpen || !!confirmMerge;
   useEffect(() => {
@@ -864,6 +871,47 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
       .order('data_hora', { ascending: true });
     if (data) setLembretesDevidos(data as Lembrete[]);
   }, [supabase]);
+
+  const loadOfertas = useCallback(async () => {
+    const { data } = await supabase.from('ofertas').select('*').order('criado_em', { ascending: false });
+    if (data) setOfertas(data as Oferta[]);
+  }, [supabase]);
+  useEffect(() => { loadOfertas(); }, [loadOfertas]);
+
+  async function handleAddOferta() {
+    if (!novaOfertaProduto.trim() || !novaOfertaLink.trim()) { showToast('Preenche produto e link'); return; }
+    const { error } = await supabase.from('ofertas').insert({
+      produto: novaOfertaProduto.trim(),
+      link: novaOfertaLink.trim(),
+      observacoes: novaOfertaObs.trim() || null,
+    });
+    if (error) { showToast('Não consegui salvar a oferta'); return; }
+    setNovaOfertaProduto(''); setNovaOfertaLink(''); setNovaOfertaObs('');
+    showToast('Oferta adicionada');
+    loadOfertas();
+  }
+
+  async function handleDeleteOferta(id: string) {
+    const { error } = await supabase.from('ofertas').delete().eq('id', id);
+    if (error) { showToast('Erro ao excluir oferta'); return; }
+    setOfertas(prev => prev.filter(o => o.id !== id));
+  }
+
+  function clientesCompativeisComOferta(produtoOferta: string): Cliente[] {
+    const alvo = normalizeText(produtoOferta);
+    return clients.filter(c => {
+      const itens = splitProdutos(c.produto);
+      return itens.some(item => {
+        const t = normalizeText(item);
+        return t.includes(alvo) || alvo.includes(t);
+      });
+    });
+  }
+
+  function enviarOfertaWhatsApp(oferta: Oferta, cliente: Cliente) {
+    const texto = `Oi ${cliente.nome}! Vi essa oferta e lembrei de você: ${oferta.link}${oferta.observacoes ? `\n${oferta.observacoes}` : ''}\n\nQuer que eu reserve?`;
+    window.open(waLinkWithText(cliente.telefone, texto), '_blank');
+  }
 
   useEffect(() => {
     loadClients(); loadConfig(); loadJarbasMessages(); loadLembretesDevidos();
@@ -1846,6 +1894,112 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
             <div className="stat-card danger"><div className="stat-num mono">{Math.round(statAtrasadosAnim)}</div><div className="stat-label"><AlertTriangle size={12} /> Atrasados</div></div>
             <div className="stat-card gold"><div className="stat-num mono">{Math.round(statVipsAnim)}</div><div className="stat-label"><Star size={12} /> VIPs</div></div>
             <div className="stat-card danger"><div className="stat-num mono">{Math.round(statIncompletosAnim)}</div><div className="stat-label"><PhoneOff size={12} /> Incompletos</div></div>
+          </div>
+
+          <div className="tendencia-card">
+            <button type="button" className="tendencia-header tendencia-header-toggle" onClick={() => setOfertasOpen(o => !o)}>
+              <div className="tendencia-title"><ShoppingBag size={15} /> Ofertas ({ofertas.length})</div>
+              <ChevronDown size={16} style={{ transform: ofertasOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease' }} />
+            </button>
+            {ofertasOpen && (
+              <div style={{ marginTop: 10 }}>
+                <div className="oferta-form">
+                  <input
+                    placeholder="Produto (ex: Geladeira Brastemp 400L)"
+                    value={novaOfertaProduto}
+                    onChange={e => setNovaOfertaProduto(e.target.value)}
+                  />
+                  <input
+                    placeholder="Link do Instagram"
+                    value={novaOfertaLink}
+                    onChange={e => setNovaOfertaLink(e.target.value)}
+                  />
+                  <input
+                    placeholder="Observação (opcional)"
+                    value={novaOfertaObs}
+                    onChange={e => setNovaOfertaObs(e.target.value)}
+                  />
+                  <button type="button" className="btn primary" onClick={handleAddOferta}>Adicionar oferta</button>
+                </div>
+
+                {ofertas.length === 0 ? (
+                  <div className="gerente-vendedor-vazio">Nenhuma oferta cadastrada ainda.</div>
+                ) : (
+                  ofertas.map(oferta => {
+                    const compativeis = clientesCompativeisComOferta(oferta.produto);
+                    const expandida = ofertaExpandida === oferta.id;
+                    return (
+                      <div key={oferta.id} className="oferta-card">
+                        <div className="oferta-card-header" onClick={() => setOfertaExpandida(expandida ? null : oferta.id)}>
+                          <div>
+                            <div className="oferta-produto">{oferta.produto}</div>
+                            <a
+                              href={oferta.link}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="oferta-link"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              Ver no Instagram
+                            </a>
+                            {oferta.observacoes && <div className="oferta-obs">{oferta.observacoes}</div>}
+                          </div>
+                          <div className="oferta-card-actions">
+                            <span className="usuario-badge">{compativeis.length} compatível{compativeis.length !== 1 ? 'eis' : ''}</span>
+                            <button type="button" className="close-btn" onClick={e => { e.stopPropagation(); handleDeleteOferta(oferta.id); }}>
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                        {expandida && (
+                          <div className="oferta-clientes">
+                            {compativeis.length > 0 && (
+                              <>
+                                <div className="oferta-clientes-title">Combina com:</div>
+                                {compativeis.map(c => (
+                                  <div key={c.id} className="duplicado-item">
+                                    <div className="duplicado-info">
+                                      <span className="duplicado-nome">{c.nome}</span>
+                                      <span className="duplicado-status">{STATUS[c.status]?.label || c.status}</span>
+                                    </div>
+                                    <button type="button" className="duplicado-btn merge" onClick={() => enviarOfertaWhatsApp(oferta, c)}>
+                                      <MessageCircle size={12} /> WhatsApp
+                                    </button>
+                                  </div>
+                                ))}
+                              </>
+                            )}
+                            <div className="oferta-outro-cliente">
+                              <select
+                                className="usuario-select"
+                                value={ofertaClienteEscolhido[oferta.id] || ''}
+                                onChange={e => setOfertaClienteEscolhido(prev => ({ ...prev, [oferta.id]: e.target.value }))}
+                              >
+                                <option value="">Enviar pra outro cliente...</option>
+                                {clients.filter(c => !compativeis.some(cc => cc.id === c.id)).map(c => (
+                                  <option key={c.id} value={c.id}>{c.nome}</option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                className="duplicado-btn merge"
+                                disabled={!ofertaClienteEscolhido[oferta.id]}
+                                onClick={() => {
+                                  const cliente = clients.find(c => c.id === ofertaClienteEscolhido[oferta.id]);
+                                  if (cliente) enviarOfertaWhatsApp(oferta, cliente);
+                                }}
+                              >
+                                Enviar
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
 
           {lembretesDevidos.length > 0 && (

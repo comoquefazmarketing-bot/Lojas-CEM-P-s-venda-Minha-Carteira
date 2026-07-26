@@ -128,6 +128,19 @@ Rode **`supabase/migration_v14_metas_historico.sql`** no SQL Editor do Supabase 
 - Sem essa migração o app funciona normal, só sem esse histórico (a meta batida e o confete
   continuam funcionando do mesmo jeito).
 
+## Novidades — Ofertas (Instagram) cruzadas com interesse dos clientes
+
+Rode **`supabase/migration_v15_ofertas.sql`** no SQL Editor do Supabase (cria a tabela `ofertas`,
+com RLS igual às outras).
+
+- Painel novo "Ofertas" no dashboard: cola o link de um post/vídeo do Instagram (baixado do jeito
+  que já faz hoje) junto com o nome do produto, e o app guarda isso na sua base de ofertas.
+- Pra cada oferta, o app mostra automaticamente quais clientes/prospects têm esse produto como
+  interesse — com um botão de WhatsApp pronto, mensagem já preenchida com o link.
+- Não trava só nos "compatíveis": também dá pra escolher qualquer outro cliente da carteira e
+  mandar a mesma oferta pra ele.
+- Sem essa migração o app funciona normal, só sem esse painel.
+
 ## Estrutura
 
 ```
