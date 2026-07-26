@@ -475,6 +475,8 @@ body::before {
   background:var(--paper-alt); padding:5px 9px; border-radius:999px;
 }
 .gerente-indicador.alerta { color:var(--rust); background:rgba(194,59,30,0.1); }
+.gerente-subsecao { margin-bottom:10px; }
+.gerente-subsecao-titulo { font-size:10.5px; text-transform:uppercase; letter-spacing:0.4px; color:var(--ink-soft); margin-bottom:5px; }
 
 .usuario-row {
   display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
