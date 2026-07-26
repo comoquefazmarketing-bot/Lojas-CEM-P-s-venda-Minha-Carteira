@@ -103,6 +103,19 @@ coluna `ativo` na tabela `profiles`).
 - **Transparência de dados**: o Jarbas agora avisa, embaixo da caixa de mensagem, que as perguntas
   e os dados de clientes usados nas respostas são enviados pra API do Google Gemini.
 
+## Novidades — LGPD, modo offline e transferência de carteira
+
+Sem migração nova pra essa leva.
+
+- **Exportar dados (LGPD)**: no cadastro/edição de um cliente já existente, o botão "Exportar
+  dados" baixa um `.json` com tudo que o app guarda sobre aquela pessoa (cadastro + histórico de
+  anotações) — pra atender pedido de acesso/portabilidade de dados.
+- **Aviso de offline**: uma faixa vermelha aparece no topo quando o celular/PC perde conexão,
+  avisando que as informações na tela podem estar desatualizadas.
+- **Transferir carteira**: na seção "Usuários com acesso" (papel gerente), dá pra escolher um
+  vendedor de destino e transferir todos os clientes (e o histórico de anotações junto) de um
+  vendedor pro outro — útil quando alguém troca de loja ou sai da empresa.
+
 ## Estrutura
 
 ```
