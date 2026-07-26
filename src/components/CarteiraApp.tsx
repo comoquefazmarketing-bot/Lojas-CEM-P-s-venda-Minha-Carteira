@@ -2403,6 +2403,9 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                     <Send size={16} />
                   </button>
                 </div>
+                <p className="jarbas-disclaimer">
+                  Suas perguntas e dados de clientes são enviados pra API do Google Gemini pra gerar as respostas.
+                </p>
               </motion.div>
             </motion.div>
           )}
