@@ -992,6 +992,26 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     });
   }
 
+  async function baixarImagemOferta(oferta: Oferta) {
+    if (!oferta.imagem_url) return;
+    try {
+      const res = await fetch(oferta.imagem_url);
+      const blob = await res.blob();
+      const ext = (oferta.imagem_url.split('.').pop() || 'jpg').split('?')[0];
+      const base = normalizeText(oferta.produto).replace(/[^a-z0-9]+/g, '-').slice(0, 40) || 'oferta';
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${base}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      showToast('Não consegui baixar a imagem');
+    }
+  }
+
   function enviarOfertaWhatsApp(oferta: Oferta, cliente: Cliente) {
     // nunca manda o link cru do Storage no texto — pra um cliente, uma URL de
     // supabase.co sem contexto parece golpe. Se não tem link do Instagram, o
@@ -2130,6 +2150,11 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                         </div>
                         {expandida && (
                           <div className="oferta-clientes">
+                            {oferta.imagem_url && (
+                              <button type="button" className="duplicado-btn merge" style={{ marginBottom: 10 }} onClick={() => baixarImagemOferta(oferta)}>
+                                <Download size={12} /> Baixar imagem
+                              </button>
+                            )}
                             {compativeis.length > 0 && (
                               <>
                                 <div className="oferta-clientes-title">Combina com:</div>
