@@ -1452,6 +1452,8 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   async function registrarMetaBatida() {
     if (!metaMensal) return;
     const hoje = new Date();
+    // só grava na primeira vez — sem isso, toda vez que a página recarrega (e a ref de
+    // "já passou de 100%" reseta), ele regravaria o dia de hoje por cima do valor original
     await supabase.from('metas_historico').upsert(
       {
         mes: monthKey(todayIso()),
@@ -1459,7 +1461,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
         dia_meta_batida: hoje.getDate(),
         data_meta_batida: todayIso(),
       },
-      { onConflict: 'user_id,mes' }
+      { onConflict: 'user_id,mes', ignoreDuplicates: true }
     );
     loadMetasHistorico();
   }
