@@ -154,6 +154,10 @@ Storage).
   cliente sempre recebe algo clicável pra ver a oferta.
 - Sem essa migração o resto do painel de Ofertas continua funcionando normal, só sem o anexo de
   imagem.
+- Ao escolher a imagem (no cadastro de uma oferta nova), o app manda pra mesma IA do Jarbas
+  (Gemini) ler a arte e sugerir o nome do produto automaticamente — só preenche se o campo
+  "Produto" ainda estiver vazio, então nunca sobrescreve o que você já digitou. Usa a mesma chave
+  `GEMINI_API_KEY` já configurada pro Jarbas.
 
 ## Estrutura
 

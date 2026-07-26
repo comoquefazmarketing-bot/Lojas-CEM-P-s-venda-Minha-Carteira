@@ -728,6 +728,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [novaOfertaObs, setNovaOfertaObs] = useState('');
   const [novaOfertaImagem, setNovaOfertaImagem] = useState<File | null>(null);
   const [enviandoOferta, setEnviandoOferta] = useState(false);
+  const [analisandoImagemOferta, setAnalisandoImagemOferta] = useState(false);
   const [ofertaClienteEscolhido, setOfertaClienteEscolhido] = useState<Record<string, string>>({});
   const [ofertaExpandida, setOfertaExpandida] = useState<string | null>(null);
   const [editandoOfertaId, setEditandoOfertaId] = useState<string | null>(null);
@@ -891,6 +892,35 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     const { error } = await supabase.storage.from('ofertas').upload(path, file);
     if (error) { showToast('Não consegui enviar a imagem'); return null; }
     return supabase.storage.from('ofertas').getPublicUrl(path).data.publicUrl;
+  }
+
+  function fileParaBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(',')[1] ?? '');
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleNovaOfertaImagem(file: File | null) {
+    setNovaOfertaImagem(file);
+    if (!file || novaOfertaProduto.trim()) return;
+    setAnalisandoImagemOferta(true);
+    try {
+      const imagemBase64 = await fileParaBase64(file);
+      const res = await fetch('/api/ofertas/analisar-imagem', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ imagemBase64, mimeType: file.type }),
+      });
+      const data = await res.json();
+      if (data?.produto && data.produto !== 'Produto não identificado') setNovaOfertaProduto(data.produto);
+    } catch {
+      // silencioso — o vendedor sempre pode digitar o produto na mão
+    } finally {
+      setAnalisandoImagemOferta(false);
+    }
   }
 
   async function handleAddOferta() {
@@ -1997,9 +2027,9 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                       type="file"
                       accept="image/*"
                       className="oferta-file-input"
-                      onChange={e => setNovaOfertaImagem(e.target.files?.[0] || null)}
+                      onChange={e => handleNovaOfertaImagem(e.target.files?.[0] || null)}
                     />
-                    {novaOfertaImagem ? novaOfertaImagem.name : 'Anexar arte (opcional)'}
+                    {analisandoImagemOferta ? 'Analisando imagem...' : (novaOfertaImagem ? novaOfertaImagem.name : 'Anexar arte (opcional)')}
                   </label>
                   <button type="button" className="btn primary" disabled={enviandoOferta} onClick={handleAddOferta}>
                     {enviandoOferta ? 'Enviando...' : 'Adicionar oferta'}
