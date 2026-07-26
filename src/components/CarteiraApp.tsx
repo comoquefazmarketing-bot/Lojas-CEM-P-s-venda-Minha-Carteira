@@ -676,6 +676,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [relatorioMes, setRelatorioMes] = useState(() => monthKey(todayIso()));
   const [pushSupported, setPushSupported] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
   const [metaOpen, setMetaOpen] = useState(true);
   const [produtosOpen, setProdutosOpen] = useState(true);
   const [funilOpen, setFunilOpen] = useState(true);
@@ -710,6 +711,18 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     navigator.serviceWorker.register('/sw.js').then(reg => {
       reg.pushManager.getSubscription().then(sub => setPushSubscribed(!!sub));
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setIsOffline(!navigator.onLine);
+    const aoFicarOnline = () => setIsOffline(false);
+    const aoFicarOffline = () => setIsOffline(true);
+    window.addEventListener('online', aoFicarOnline);
+    window.addEventListener('offline', aoFicarOffline);
+    return () => {
+      window.removeEventListener('online', aoFicarOnline);
+      window.removeEventListener('offline', aoFicarOffline);
+    };
   }, []);
 
   useEffect(() => {
@@ -895,6 +908,23 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     const { error } = await supabase.from('interacoes').delete().eq('id', id);
     if (error) { showToast('Não consegui excluir'); return; }
     setInteracoes(prev => prev.filter(i => i.id !== id));
+  }
+
+  function handleExportarDadosCliente() {
+    if (!form.id) return;
+    const dados = {
+      exportado_em: new Date().toISOString(),
+      cliente: form,
+      historico_de_interacoes: interacoes,
+    };
+    const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dados-${(form.nome || 'cliente').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Dados exportados');
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -1527,6 +1557,11 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
 
   return (
     <div className="carteira-app">
+      {isOffline && (
+        <div className="offline-banner">
+          <PhoneOff size={13} /> Sem conexão com a internet — as informações podem estar desatualizadas.
+        </div>
+      )}
       {showConfetti && <Confetti />}
       {loading ? (
         <div className="loading-msg">carregando carteira...</div>
@@ -2051,7 +2086,14 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
               <motion.form key="form-modal" className="modal" onClick={e => e.stopPropagation()} onSubmit={handleSave} {...modalMotion}>
                 <div className="modal-header">
                   <span className="modal-title">{form.id ? 'Editar cliente' : 'Novo cliente'}</span>
-                  <button type="button" className="close-btn" onClick={() => setFormOpen(false)}><X size={20} /></button>
+                  <div className="modal-header-actions">
+                    {form.id && (
+                      <button type="button" className="backup-btn" onClick={handleExportarDadosCliente} title="Exportar todos os dados desse cliente (LGPD)">
+                        <Download size={13} /> Exportar dados
+                      </button>
+                    )}
+                    <button type="button" className="close-btn" onClick={() => setFormOpen(false)}><X size={20} /></button>
+                  </div>
                 </div>
                 <div className="form-grid">
                   <div className="form-field full">

@@ -39,6 +39,8 @@ export default function GerenteApp({ userEmail }: { userEmail: string }) {
   const [expandido, setExpandido] = useState<string | null>(null);
   const [usuarios, setUsuarios] = useState<UsuarioGerencia[]>([]);
   const [usuariosOpen, setUsuariosOpen] = useState(false);
+  const [destinoTransferencia, setDestinoTransferencia] = useState<Record<string, string>>({});
+  const [transferindo, setTransferindo] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -77,6 +79,25 @@ export default function GerenteApp({ userEmail }: { userEmail: string }) {
       return;
     }
     loadUsuarios();
+  }
+
+  async function handleTransferirCarteira(deUserId: string) {
+    const paraUserId = destinoTransferencia[deUserId];
+    if (!paraUserId) { alert('Escolhe pra quem transferir a carteira.'); return; }
+    if (!confirm('Transferir todos os clientes desse vendedor pro escolhido? Essa ação não pode ser desfeita.')) return;
+    setTransferindo(deUserId);
+    const res = await fetch('/api/gerente/transferir-carteira', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ de_user_id: deUserId, para_user_id: paraUserId }),
+    });
+    const data = await res.json().catch(() => null);
+    setTransferindo(null);
+    if (!res.ok) { alert(data?.error || 'Não consegui transferir a carteira.'); return; }
+    alert(`${data.transferidos} cliente(s) transferido(s) com sucesso.`);
+    setDestinoTransferencia(prev => ({ ...prev, [deUserId]: '' }));
+    const [{ data: c }] = await Promise.all([supabase.from('clientes').select('*')]);
+    setClientes((c as Cliente[]) ?? []);
   }
 
   async function handleLogout() {
@@ -229,6 +250,24 @@ export default function GerenteApp({ userEmail }: { userEmail: string }) {
                     <span className={`usuario-badge ${u.ativo ? 'ativo' : 'inativo'}`}>{u.ativo ? 'Ativo' : 'Desativado'}</span>
                   </div>
                   <div className="usuario-actions">
+                    <select
+                      className="usuario-select"
+                      value={destinoTransferencia[u.user_id] || ''}
+                      onChange={e => setDestinoTransferencia(prev => ({ ...prev, [u.user_id]: e.target.value }))}
+                    >
+                      <option value="">Transferir carteira pra...</option>
+                      {usuarios.filter(o => o.user_id !== u.user_id).map(o => (
+                        <option key={o.user_id} value={o.user_id}>{o.email}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="usuario-btn"
+                      disabled={!destinoTransferencia[u.user_id] || transferindo === u.user_id}
+                      onClick={() => handleTransferirCarteira(u.user_id)}
+                    >
+                      {transferindo === u.user_id ? 'Transferindo...' : 'Transferir'}
+                    </button>
                     <button type="button" className="usuario-btn" onClick={() => alterarUsuario(u.user_id, { role: u.role === 'gerente' ? 'vendedor' : 'gerente' })}>
                       {u.role === 'gerente' ? 'Rebaixar a vendedor' : 'Promover a gerente'}
                     </button>
