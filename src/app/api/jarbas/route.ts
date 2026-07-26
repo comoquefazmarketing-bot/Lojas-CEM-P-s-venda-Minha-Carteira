@@ -120,9 +120,15 @@ export async function POST(request: Request) {
     );
 
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: 'Não consegui falar com o Jarbas agora. Tenta de novo em instantes.' }), {
-        status: 502, headers: { 'content-type': 'application/json' },
-      });
+      const corpoErro = await res.text().catch(() => '');
+      console.error('Jarbas: erro da API do Gemini', res.status, corpoErro);
+      return new Response(
+        JSON.stringify({
+          error: 'Não consegui falar com o Jarbas agora. Tenta de novo em instantes.',
+          debug: { geminiStatus: res.status, geminiBody: corpoErro.slice(0, 500) },
+        }),
+        { status: 502, headers: { 'content-type': 'application/json' } }
+      );
     }
 
     const data = await res.json();
