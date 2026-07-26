@@ -894,13 +894,34 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     return supabase.storage.from('ofertas').getPublicUrl(path).data.publicUrl;
   }
 
-  function fileParaBase64(file: File): Promise<string> {
+  function blobParaBase64(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve((reader.result as string).split(',')[1] ?? '');
       reader.onerror = reject;
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(blob);
     });
+  }
+
+  // Funções serverless da Vercel rejeitam corpo de requisição acima de 4,5MB — uma foto de
+  // arte promocional em tamanho original + base64 (que aumenta ~33% o tamanho) estoura isso
+  // fácil. Reduz a imagem antes de mandar pra IA (o arquivo original, sem compressão, continua
+  // sendo o que é salvo de verdade na oferta).
+  async function comprimirImagemParaAnalise(file: File): Promise<{ base64: string; mimeType: string }> {
+    const bitmap = await createImageBitmap(file);
+    const maxDim = 1600;
+    const escala = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * escala));
+    const h = Math.max(1, Math.round(bitmap.height * escala));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return { base64: await blobParaBase64(file), mimeType: file.type };
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    const blob: Blob | null = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.82));
+    if (!blob) return { base64: await blobParaBase64(file), mimeType: file.type };
+    return { base64: await blobParaBase64(blob), mimeType: 'image/jpeg' };
   }
 
   async function handleNovaOfertaImagem(file: File | null) {
@@ -908,11 +929,11 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     if (!file || (novaOfertaProduto.trim() && novaOfertaObs.trim())) return;
     setAnalisandoImagemOferta(true);
     try {
-      const imagemBase64 = await fileParaBase64(file);
+      const { base64: imagemBase64, mimeType } = await comprimirImagemParaAnalise(file);
       const res = await fetch('/api/ofertas/analisar-imagem', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ imagemBase64, mimeType: file.type }),
+        body: JSON.stringify({ imagemBase64, mimeType }),
       });
       const data = await res.json();
       if (!res.ok || data?.error) {
