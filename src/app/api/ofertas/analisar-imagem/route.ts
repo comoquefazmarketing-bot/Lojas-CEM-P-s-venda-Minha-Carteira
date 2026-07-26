@@ -2,12 +2,20 @@ import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
-const PROMPT = `Essa imagem é uma arte promocional de oferta de uma loja de móveis e eletrodomésticos (Lojas CEM). Leia com atenção todo o texto visível na imagem e extraia:
+const PROMPT = `Essa imagem é uma arte promocional de oferta da Lojas CEM (loja de móveis e eletrodomésticos). Esse tipo de arte quase sempre segue este padrão visual:
 
-- produto: o nome completo do produto, incluindo tipo, marca e modelo, exatamente como aparece na imagem (ex: "Panela de Pressão Elétrica Midea PPG70S", "Ar-Condicionado Philco PAC12 Inverter Frio 220V"). Nunca responda só com uma palavra genérica isolada (nunca só "Panela" ou só "TV") — sempre inclua marca e modelo se estiverem visíveis na imagem.
-- observacoes: um resumo curto (1 a 3 frases, pronto pra mandar num WhatsApp) com o preço à vista, o parcelamento (valor e quantidade de parcelas) se aparecerem na imagem, e as principais características técnicas listadas.
+1. Um banner colorido no topo (tipo "SUPERMÊS DE ANIVERSÁRIO" ou parecido) com a logo da loja.
+2. Logo abaixo do banner, em letras grandes e coloridas, o NOME DO PRODUTO — é sempre o texto mais chamativo depois do banner (ex: "GUARDA-ROUPAS PARANÁ", "PANELA DE PRESSÃO ELÉTRICA MIDEA PPG70S"). Esse nome pode ter marca de fabricante (Midea, Philco, Samsung, etc.) ou pode ser só o nome do modelo próprio da loja, sem marca nenhuma (ex: "Guarda-Roupas Paraná") — os dois casos são válidos, não exija marca de terceiro pra aceitar o nome.
+3. Uma lista de características técnicas em bullets (ex: "6 PORTAS", "4 GAVETAS", "COM ESPELHO", "LARGURA: 2,62M").
+4. Um balão ou destaque colorido com o preço à vista, o parcelamento (ex: "12X R$ 231,40") e o total.
+5. Um texto bem miúdo no rodapé, na vertical ou lateral, com termos legais (juros, validade da promoção, etc.) — ignore esse texto miúdo, ele nunca é o nome do produto.
 
-Se não conseguir identificar nada de útil, responda com os dois campos como string vazia.`;
+Sua tarefa: leia essa imagem com atenção e responda em JSON com dois campos:
+
+- produto: o nome do produto exatamente como está escrito na imagem (item 2 acima), incluindo marca se aparecer. NUNCA deixe esse campo vazio se houver qualquer texto de nome de produto legível na imagem — mesmo sem marca de fabricante, use o nome como está escrito.
+- observacoes: um resumo curto (1 a 3 frases, pronto pra mandar num WhatsApp) juntando o preço à vista, o parcelamento e as principais características técnicas da lista de bullets.
+
+Só deixe os dois campos como string vazia se a imagem realmente não for uma arte de oferta de produto (por exemplo, se for uma foto qualquer sem nenhum texto promocional).`;
 
 export async function POST(request: Request) {
   const supabase = await createClient();
