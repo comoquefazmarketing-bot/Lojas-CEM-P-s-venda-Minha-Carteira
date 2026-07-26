@@ -33,6 +33,15 @@ export interface Configuracoes {
   meta_outros: number | null;
 }
 
+export interface Lembrete {
+  id: string;
+  user_id?: string;
+  texto: string;
+  data_hora: string;
+  cumprido: boolean;
+  criado_em?: string;
+}
+
 export interface Interacao {
   id: string;
   cliente_id: string;

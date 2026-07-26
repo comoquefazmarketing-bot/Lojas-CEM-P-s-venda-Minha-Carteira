@@ -80,6 +80,16 @@ Rode **`supabase/migration_v11_jarbas_memoria.sql`** no SQL Editor do Supabase (
 - Sem essa migração o app continua funcionando normalmente, só que sem memória (cada conversa
   recomeça do zero).
 
+## Novidades — Lembretes a partir do Jarbas
+
+Rode **`supabase/migration_v12_lembretes.sql`** no SQL Editor do Supabase (cria a tabela
+`lembretes`, com RLS igual às outras).
+
+- Qualquer resposta do Jarbas ganha um botão "Salvar como lembrete" — escolhe data/hora e pronto.
+- Um painel "Lembretes" aparece no topo do dashboard assim que a data/hora chega (não precisa de
+  push nem do app aberto no horário exato — ele aparece na próxima vez que você abrir o app).
+- Clica em "Concluído" pra tirar da lista depois de resolver.
+
 ## Estrutura
 
 ```
