@@ -826,7 +826,7 @@ body::before {
 .modal {
   background:var(--modal-bg); -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%);
   border: 1px solid var(--surface-glass-border);
-  width:100%; max-width:520px; max-height:92vh; overflow-y:auto; border-radius:16px 16px 0 0; padding:22px;
+  width:100%; max-width:520px; max-height:92vh; max-height:92dvh; overflow-y:auto; overscroll-behavior:contain; border-radius:16px 16px 0 0; padding:22px;
   box-shadow: 0 -8px 40px rgba(15,25,55,0.2);
   animation: popIn 0.3s cubic-bezier(.2,.8,.3,1) both;
 }

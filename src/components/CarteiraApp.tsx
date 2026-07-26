@@ -690,6 +690,14 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [jarbasInput, setJarbasInput] = useState('');
   const [jarbasLoading, setJarbasLoading] = useState(false);
 
+  const algumModalAberto = formOpen || !!confirmDelete || relatorioOpen || jarbasOpen;
+  useEffect(() => {
+    if (!algumModalAberto) return;
+    const overflowOriginal = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = overflowOriginal; };
+  }, [algumModalAberto]);
+
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
     setPushSupported(true);
