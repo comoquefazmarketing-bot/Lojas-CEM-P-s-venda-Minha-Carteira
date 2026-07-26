@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { gerarRespostaJarbas, type JarbasContexto } from '@/lib/jarbas';
-import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao } from '@/types';
+import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao, Lembrete } from '@/types';
 
 /* ---------------------------------- utils ---------------------------------- */
 
@@ -692,6 +692,9 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [jarbasMessages, setJarbasMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [jarbasInput, setJarbasInput] = useState('');
   const [jarbasLoading, setJarbasLoading] = useState(false);
+  const [lembretesDevidos, setLembretesDevidos] = useState<Lembrete[]>([]);
+  const [salvandoLembreteIdx, setSalvandoLembreteIdx] = useState<number | null>(null);
+  const [lembreteDataHoraInput, setLembreteDataHoraInput] = useState('');
 
   const algumModalAberto = formOpen || !!confirmDelete || relatorioOpen || jarbasOpen || !!confirmMerge;
   useEffect(() => {
@@ -805,7 +808,47 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     }
   }, [supabase]);
 
-  useEffect(() => { loadClients(); loadConfig(); }, [loadClients, loadConfig]);
+  const loadJarbasMessages = useCallback(async () => {
+    const { data } = await supabase
+      .from('jarbas_mensagens')
+      .select('role, content')
+      .order('criado_em', { ascending: true })
+      .limit(200);
+    if (data) setJarbasMessages(data as { role: 'user' | 'assistant'; content: string }[]);
+  }, [supabase]);
+
+  const loadLembretesDevidos = useCallback(async () => {
+    const { data } = await supabase
+      .from('lembretes')
+      .select('*')
+      .eq('cumprido', false)
+      .lte('data_hora', new Date().toISOString())
+      .order('data_hora', { ascending: true });
+    if (data) setLembretesDevidos(data as Lembrete[]);
+  }, [supabase]);
+
+  useEffect(() => {
+    loadClients(); loadConfig(); loadJarbasMessages(); loadLembretesDevidos();
+  }, [loadClients, loadConfig, loadJarbasMessages, loadLembretesDevidos]);
+
+  async function handleSalvarLembrete(texto: string) {
+    if (!lembreteDataHoraInput) { showToast('Escolhe uma data e hora'); return; }
+    const { error } = await supabase.from('lembretes').insert({
+      texto,
+      data_hora: new Date(lembreteDataHoraInput).toISOString(),
+    });
+    if (error) { showToast('Não consegui salvar o lembrete'); return; }
+    showToast('Lembrete salvo 👍');
+    setSalvandoLembreteIdx(null);
+    setLembreteDataHoraInput('');
+    loadLembretesDevidos();
+  }
+
+  async function handleConcluirLembrete(id: string) {
+    const { error } = await supabase.from('lembretes').update({ cumprido: true }).eq('id', id);
+    if (error) { showToast('Erro ao atualizar lembrete'); return; }
+    setLembretesDevidos(prev => prev.filter(l => l.id !== id));
+  }
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 2400); }
 
@@ -959,6 +1002,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     setJarbasMessages(historico);
     setJarbasInput('');
     setJarbasLoading(true);
+    void supabase.from('jarbas_mensagens').insert({ role: 'user', content: texto });
 
     const contexto: JarbasContexto = {
       metaMensal,
@@ -973,19 +1017,22 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
       prioridadesHoje: acaoDoDia.map(a => ({ nome: a.cliente.nome, motivo: a.motivo })),
     };
 
-    // Tenta o Jarbas "de verdade" (Claude + dados reais da carteira). Se a API não
-    // estiver configurada ou falhar, cai pra base de conhecimento local (sem IA).
+    // Tenta o Jarbas "de verdade" (Gemini + dados reais da carteira, com memória das
+    // conversas anteriores). Se a API não estiver configurada ou falhar, cai pra base
+    // de conhecimento local (sem IA). Manda só as últimas mensagens pro modelo — o
+    // histórico completo fica salvo no banco, mas não precisa virar contexto infinito.
     try {
       let usouIA = false;
       try {
         const res = await fetch('/api/jarbas', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ messages: historico }),
+          body: JSON.stringify({ messages: historico.slice(-30) }),
         });
         const data = await res.json().catch(() => null);
         if (res.ok && data?.reply) {
           setJarbasMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+          void supabase.from('jarbas_mensagens').insert({ role: 'assistant', content: data.reply });
           usouIA = true;
         }
       } catch {
@@ -995,6 +1042,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
       if (!usouIA) {
         const resposta = gerarRespostaJarbas(texto, contexto);
         setJarbasMessages(prev => [...prev, { role: 'assistant', content: resposta }]);
+        void supabase.from('jarbas_mensagens').insert({ role: 'assistant', content: resposta });
       }
     } finally {
       setJarbasLoading(false);
@@ -1685,6 +1733,25 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
             <div className="stat-card danger"><div className="stat-num mono">{Math.round(statIncompletosAnim)}</div><div className="stat-label"><PhoneOff size={12} /> Incompletos</div></div>
           </div>
 
+          {lembretesDevidos.length > 0 && (
+            <div className="tendencia-card">
+              <div className="tendencia-title" style={{ marginBottom: 10 }}><Bell size={15} /> Lembretes ({lembretesDevidos.length})</div>
+              <div className="duplicados-lista" style={{ marginTop: 0 }}>
+                {lembretesDevidos.map(l => (
+                  <div key={l.id} className="duplicado-item">
+                    <div className="duplicado-info">
+                      <span className="duplicado-nome">{l.texto}</span>
+                      <span className="duplicado-status">{new Date(l.data_hora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    <div className="duplicado-actions">
+                      <button type="button" className="duplicado-btn merge" onClick={() => handleConcluirLembrete(l.id)}>Concluído</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {duplicadosVisiveis.length > 0 && (
             <div className="tendencia-card">
               <button type="button" className="tendencia-header tendencia-header-toggle" onClick={() => setDuplicadosOpen(o => !o)}>
@@ -2302,7 +2369,26 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                     </div>
                   )}
                   {jarbasMessages.map((m, i) => (
-                    <div key={i} className={`jarbas-msg ${m.role}`}>{m.content}</div>
+                    <div key={i} className={`jarbas-msg ${m.role}`}>
+                      {m.content}
+                      {m.role === 'assistant' && (
+                        salvandoLembreteIdx === i ? (
+                          <div className="lembrete-picker">
+                            <input
+                              type="datetime-local"
+                              value={lembreteDataHoraInput}
+                              onChange={e => setLembreteDataHoraInput(e.target.value)}
+                            />
+                            <button type="button" className="lembrete-picker-btn confirmar" onClick={() => handleSalvarLembrete(m.content)}>Salvar</button>
+                            <button type="button" className="lembrete-picker-btn cancelar" onClick={() => { setSalvandoLembreteIdx(null); setLembreteDataHoraInput(''); }}>Cancelar</button>
+                          </div>
+                        ) : (
+                          <button type="button" className="salvar-lembrete-btn" onClick={() => setSalvandoLembreteIdx(i)}>
+                            <Bell size={11} /> Salvar como lembrete
+                          </button>
+                        )
+                      )}
+                    </div>
                   ))}
                   {jarbasLoading && <div className="jarbas-loading">Jarbas está pensando...</div>}
                 </div>
