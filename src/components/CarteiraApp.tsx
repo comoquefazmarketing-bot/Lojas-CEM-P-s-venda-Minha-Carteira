@@ -722,12 +722,16 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [salvandoLembreteIdx, setSalvandoLembreteIdx] = useState<number | null>(null);
   const [lembreteDataHoraInput, setLembreteDataHoraInput] = useState('');
   const [ofertas, setOfertas] = useState<Oferta[]>([]);
-  const [ofertasOpen, setOfertasOpen] = useState(true);
+  const [ofertasOpen, setOfertasOpen] = useState(false);
   const [novaOfertaProduto, setNovaOfertaProduto] = useState('');
   const [novaOfertaLink, setNovaOfertaLink] = useState('');
   const [novaOfertaObs, setNovaOfertaObs] = useState('');
   const [ofertaClienteEscolhido, setOfertaClienteEscolhido] = useState<Record<string, string>>({});
   const [ofertaExpandida, setOfertaExpandida] = useState<string | null>(null);
+  const [editandoOfertaId, setEditandoOfertaId] = useState<string | null>(null);
+  const [editOfertaProduto, setEditOfertaProduto] = useState('');
+  const [editOfertaLink, setEditOfertaLink] = useState('');
+  const [editOfertaObs, setEditOfertaObs] = useState('');
 
   const algumModalAberto = formOpen || !!confirmDelete || relatorioOpen || jarbasOpen || !!confirmMerge;
   useEffect(() => {
@@ -895,6 +899,29 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     const { error } = await supabase.from('ofertas').delete().eq('id', id);
     if (error) { showToast('Erro ao excluir oferta'); return; }
     setOfertas(prev => prev.filter(o => o.id !== id));
+  }
+
+  function handleStartEditOferta(oferta: Oferta) {
+    setEditandoOfertaId(oferta.id);
+    setEditOfertaProduto(oferta.produto);
+    setEditOfertaLink(oferta.link);
+    setEditOfertaObs(oferta.observacoes || '');
+  }
+
+  function handleCancelEditOferta() {
+    setEditandoOfertaId(null);
+  }
+
+  async function handleSaveEditOferta(id: string) {
+    if (!editOfertaProduto.trim() || !editOfertaLink.trim()) { showToast('Preenche produto e link'); return; }
+    const { error } = await supabase.from('ofertas').update({
+      produto: editOfertaProduto.trim(),
+      link: editOfertaLink.trim(),
+      observacoes: editOfertaObs.trim() || null,
+    }).eq('id', id);
+    if (error) { showToast('Não consegui salvar a oferta'); return; }
+    setEditandoOfertaId(null);
+    loadOfertas();
   }
 
   function clientesCompativeisComOferta(produtoOferta: string): Cliente[] {
@@ -1896,6 +1923,25 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
             <div className="stat-card danger"><div className="stat-num mono">{Math.round(statIncompletosAnim)}</div><div className="stat-label"><PhoneOff size={12} /> Incompletos</div></div>
           </div>
 
+          {lembretesDevidos.length > 0 && (
+            <div className="tendencia-card">
+              <div className="tendencia-title" style={{ marginBottom: 10 }}><Bell size={15} /> Lembretes ({lembretesDevidos.length})</div>
+              <div className="duplicados-lista" style={{ marginTop: 0 }}>
+                {lembretesDevidos.map(l => (
+                  <div key={l.id} className="duplicado-item">
+                    <div className="duplicado-info">
+                      <span className="duplicado-nome">{l.texto}</span>
+                      <span className="duplicado-status">{new Date(l.data_hora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    <div className="duplicado-actions">
+                      <button type="button" className="duplicado-btn merge" onClick={() => handleConcluirLembrete(l.id)}>Concluído</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="tendencia-card">
             <button type="button" className="tendencia-header tendencia-header-toggle" onClick={() => setOfertasOpen(o => !o)}>
               <div className="tendencia-title"><ShoppingBag size={15} /> Ofertas ({ofertas.length})</div>
@@ -1928,6 +1974,32 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                   ofertas.map(oferta => {
                     const compativeis = clientesCompativeisComOferta(oferta.produto);
                     const expandida = ofertaExpandida === oferta.id;
+                    const editando = editandoOfertaId === oferta.id;
+                    if (editando) {
+                      return (
+                        <div key={oferta.id} className="oferta-card">
+                          <div className="oferta-form" style={{ padding: 12 }}>
+                            <input
+                              placeholder="Produto"
+                              value={editOfertaProduto}
+                              onChange={e => setEditOfertaProduto(e.target.value)}
+                            />
+                            <input
+                              placeholder="Link do Instagram"
+                              value={editOfertaLink}
+                              onChange={e => setEditOfertaLink(e.target.value)}
+                            />
+                            <input
+                              placeholder="Observação (opcional)"
+                              value={editOfertaObs}
+                              onChange={e => setEditOfertaObs(e.target.value)}
+                            />
+                            <button type="button" className="btn primary" onClick={() => handleSaveEditOferta(oferta.id)}>Salvar</button>
+                            <button type="button" className="btn" onClick={handleCancelEditOferta}>Cancelar</button>
+                          </div>
+                        </div>
+                      );
+                    }
                     return (
                       <div key={oferta.id} className="oferta-card">
                         <div className="oferta-card-header" onClick={() => setOfertaExpandida(expandida ? null : oferta.id)}>
@@ -1946,6 +2018,9 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                           </div>
                           <div className="oferta-card-actions">
                             <span className="usuario-badge">{compativeis.length} compatível{compativeis.length !== 1 ? 'eis' : ''}</span>
+                            <button type="button" className="close-btn" onClick={e => { e.stopPropagation(); handleStartEditOferta(oferta); }}>
+                              <Pencil size={14} />
+                            </button>
                             <button type="button" className="close-btn" onClick={e => { e.stopPropagation(); handleDeleteOferta(oferta.id); }}>
                               <Trash2 size={14} />
                             </button>
@@ -2001,25 +2076,6 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
               </div>
             )}
           </div>
-
-          {lembretesDevidos.length > 0 && (
-            <div className="tendencia-card">
-              <div className="tendencia-title" style={{ marginBottom: 10 }}><Bell size={15} /> Lembretes ({lembretesDevidos.length})</div>
-              <div className="duplicados-lista" style={{ marginTop: 0 }}>
-                {lembretesDevidos.map(l => (
-                  <div key={l.id} className="duplicado-item">
-                    <div className="duplicado-info">
-                      <span className="duplicado-nome">{l.texto}</span>
-                      <span className="duplicado-status">{new Date(l.data_hora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
-                    </div>
-                    <div className="duplicado-actions">
-                      <button type="button" className="duplicado-btn merge" onClick={() => handleConcluirLembrete(l.id)}>Concluído</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {duplicadosVisiveis.length > 0 && (
             <div className="tendencia-card">
