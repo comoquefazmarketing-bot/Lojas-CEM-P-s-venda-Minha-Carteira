@@ -679,6 +679,9 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [metaOpen, setMetaOpen] = useState(true);
   const [produtosOpen, setProdutosOpen] = useState(true);
   const [funilOpen, setFunilOpen] = useState(true);
+  const [duplicadosOpen, setDuplicadosOpen] = useState(true);
+  const [duplicadosIgnorados, setDuplicadosIgnorados] = useState<Set<string>>(new Set());
+  const [confirmMerge, setConfirmMerge] = useState<{ prospect: Cliente; cliente: Cliente } | null>(null);
   const [incompletosOpen, setIncompletosOpen] = useState(true);
   const [diaSelecionado, setDiaSelecionado] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -690,7 +693,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const [jarbasInput, setJarbasInput] = useState('');
   const [jarbasLoading, setJarbasLoading] = useState(false);
 
-  const algumModalAberto = formOpen || !!confirmDelete || relatorioOpen || jarbasOpen;
+  const algumModalAberto = formOpen || !!confirmDelete || relatorioOpen || jarbasOpen || !!confirmMerge;
   useEffect(() => {
     if (!algumModalAberto) return;
     const overflowOriginal = document.body.style.overflow;
@@ -713,6 +716,8 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     if (savedProdutos !== null) setProdutosOpen(savedProdutos === '1');
     const savedFunil = localStorage.getItem('cem-funil-open');
     if (savedFunil !== null) setFunilOpen(savedFunil === '1');
+    const savedDuplicados = localStorage.getItem('cem-duplicados-open');
+    if (savedDuplicados !== null) setDuplicadosOpen(savedDuplicados === '1');
     const domTheme = document.documentElement.getAttribute('data-theme');
     if (domTheme === 'dark' || domTheme === 'light') setTheme(domTheme);
     const savedView = localStorage.getItem('cem-view-mode');
@@ -730,6 +735,9 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   useEffect(() => {
     localStorage.setItem('cem-funil-open', funilOpen ? '1' : '0');
   }, [funilOpen]);
+  useEffect(() => {
+    localStorage.setItem('cem-duplicados-open', duplicadosOpen ? '1' : '0');
+  }, [duplicadosOpen]);
 
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark';
@@ -892,6 +900,25 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     setConfirmDelete(null);
     if (error) { showToast('Erro ao excluir'); return; }
     showToast('Cliente removido');
+    loadClients({ silent: true });
+  }
+
+  async function handleMergeDuplicado(prospect: Cliente, cliente: Cliente) {
+    const backfill: Partial<Cliente> = {};
+    if (!cliente.indicado_por && prospect.indicado_por) backfill.indicado_por = prospect.indicado_por;
+    if (!cliente.observacoes && prospect.observacoes) backfill.observacoes = prospect.observacoes;
+    if (!cliente.data_nascimento && prospect.data_nascimento) backfill.data_nascimento = prospect.data_nascimento;
+
+    if (Object.keys(backfill).length > 0) {
+      const { error } = await supabase.from('clientes').update(backfill).eq('id', cliente.id);
+      if (error) { showToast('Erro ao unificar dados'); return; }
+    }
+    // move as anotações do prospect pro cliente antes de excluir, senão elas somem junto (cascade)
+    await supabase.from('interacoes').update({ cliente_id: cliente.id }).eq('cliente_id', prospect.id);
+    const { error: delError } = await supabase.from('clientes').delete().eq('id', prospect.id);
+    if (delError) { showToast('Erro ao remover o prospect duplicado'); return; }
+    showToast(`${prospect.nome} unificado com ${cliente.nome}`);
+    setConfirmMerge(null);
     loadClients({ silent: true });
   }
 
@@ -1247,6 +1274,30 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
 
     return { convertidos, aindaProspect, totalHistorico, taxa, cicloMedio };
   }, [clients]);
+
+  // prospect que na real já virou cliente por fora (cadastro novo manual em vez de usar
+  // "Converter em venda") — detecta pelo mesmo telefone aparecendo num prospect e num não-prospect
+  const duplicadosDetectados = useMemo(() => {
+    const clientesPorTelefone = new Map<string, Cliente>();
+    clients.forEach(c => {
+      if (c.status === 'PROSPECT') return;
+      const tel = onlyDigits(c.telefone);
+      if (tel.length >= 8) clientesPorTelefone.set(tel, c);
+    });
+    const pares: { prospect: Cliente; cliente: Cliente }[] = [];
+    clients.forEach(c => {
+      if (c.status !== 'PROSPECT') return;
+      const tel = onlyDigits(c.telefone);
+      if (tel.length < 8) return;
+      const match = clientesPorTelefone.get(tel);
+      if (match) pares.push({ prospect: c, cliente: match });
+    });
+    return pares;
+  }, [clients]);
+  const duplicadosVisiveis = useMemo(
+    () => duplicadosDetectados.filter(p => !duplicadosIgnorados.has(p.prospect.id)),
+    [duplicadosDetectados, duplicadosIgnorados]
+  );
 
   const mesesDisponiveis = useMemo(() => {
     const set = new Set<string>();
@@ -1625,6 +1676,35 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
             <div className="stat-card gold"><div className="stat-num mono">{Math.round(statVipsAnim)}</div><div className="stat-label"><Star size={12} /> VIPs</div></div>
             <div className="stat-card danger"><div className="stat-num mono">{Math.round(statIncompletosAnim)}</div><div className="stat-label"><PhoneOff size={12} /> Incompletos</div></div>
           </div>
+
+          {duplicadosVisiveis.length > 0 && (
+            <div className="tendencia-card">
+              <button type="button" className="tendencia-header tendencia-header-toggle" onClick={() => setDuplicadosOpen(o => !o)}>
+                <div className="tendencia-title"><Users size={15} /> Possíveis duplicados ({duplicadosVisiveis.length})</div>
+                <ChevronDown size={16} style={{ transform: duplicadosOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease' }} />
+              </button>
+              {duplicadosOpen && (
+                <div className="duplicados-lista">
+                  <p className="duplicados-hint">Mesmo telefone cadastrado num prospect e num cliente — provavelmente a mesma pessoa, convertida por fora sem usar o botão &quot;Converter em venda&quot;.</p>
+                  {duplicadosVisiveis.map(({ prospect, cliente }) => (
+                    <div key={prospect.id} className="duplicado-item">
+                      <div className="duplicado-info">
+                        <span className="duplicado-nome">{prospect.nome}</span>
+                        <span className="duplicado-status">prospect</span>
+                        <span aria-hidden="true">→</span>
+                        <span className="duplicado-nome">{cliente.nome}</span>
+                        <span className="duplicado-status">{STATUS[cliente.status]?.label || cliente.status}</span>
+                      </div>
+                      <div className="duplicado-actions">
+                        <button type="button" className="duplicado-btn ignore" onClick={() => setDuplicadosIgnorados(prev => new Set(prev).add(prospect.id))}>Ignorar</button>
+                        <button type="button" className="duplicado-btn merge" onClick={() => setConfirmMerge({ prospect, cliente })}>Mesclar</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {totalUltimos14 > 0 && (
             <div className="tendencia-card">
@@ -2069,6 +2149,25 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                 <div className="modal-actions">
                   <button className="btn ghost" onClick={() => setConfirmDelete(null)}>Cancelar</button>
                   <button className="btn danger" onClick={() => handleDelete(confirmDelete)}>Excluir</button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+          {confirmMerge && (
+            <motion.div key="merge-overlay" className="modal-overlay" onClick={() => setConfirmMerge(null)} {...overlayMotion}>
+              <motion.div key="merge-modal" className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()} {...modalMotion}>
+                <div className="modal-title" style={{ marginBottom: 10 }}>Mesclar duplicado?</div>
+                <p style={{ color: 'var(--ink-soft)', fontSize: 13 }}>
+                  O prospect <strong>{confirmMerge.prospect.nome}</strong> será removido e qualquer dado que faltar
+                  em <strong>{confirmMerge.cliente.nome}</strong> (indicação, observações, aniversário) será copiado
+                  pra lá. As anotações do prospect também são movidas. Essa ação não pode ser desfeita.
+                </p>
+                <div className="modal-actions">
+                  <button className="btn ghost" onClick={() => setConfirmMerge(null)}>Cancelar</button>
+                  <button className="btn danger" onClick={() => handleMergeDuplicado(confirmMerge.prospect, confirmMerge.cliente)}>Mesclar</button>
                 </div>
               </motion.div>
             </motion.div>
