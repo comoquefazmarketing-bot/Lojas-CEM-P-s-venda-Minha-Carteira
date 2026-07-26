@@ -905,7 +905,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
 
   async function handleNovaOfertaImagem(file: File | null) {
     setNovaOfertaImagem(file);
-    if (!file || novaOfertaProduto.trim()) return;
+    if (!file || (novaOfertaProduto.trim() && novaOfertaObs.trim())) return;
     setAnalisandoImagemOferta(true);
     try {
       const imagemBase64 = await fileParaBase64(file);
@@ -915,9 +915,10 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
         body: JSON.stringify({ imagemBase64, mimeType: file.type }),
       });
       const data = await res.json();
-      if (data?.produto && data.produto !== 'Produto não identificado') setNovaOfertaProduto(data.produto);
+      if (data?.produto && !novaOfertaProduto.trim()) setNovaOfertaProduto(data.produto);
+      if (data?.observacoes && !novaOfertaObs.trim()) setNovaOfertaObs(data.observacoes);
     } catch {
-      // silencioso — o vendedor sempre pode digitar o produto na mão
+      // silencioso — o vendedor sempre pode digitar produto/observação na mão
     } finally {
       setAnalisandoImagemOferta(false);
     }
@@ -992,8 +993,13 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   }
 
   function enviarOfertaWhatsApp(oferta: Oferta, cliente: Cliente) {
-    const linkParaMandar = oferta.link || oferta.imagem_url || '';
-    const texto = `Oi ${cliente.nome}! Vi essa oferta e lembrei de você: ${linkParaMandar}${oferta.observacoes ? `\n${oferta.observacoes}` : ''}\n\nQuer que eu reserve?`;
+    // nunca manda o link cru do Storage no texto — pra um cliente, uma URL de
+    // supabase.co sem contexto parece golpe. Se não tem link do Instagram, o
+    // vendedor anexa a foto na mão (a miniatura já abre em tamanho real pra salvar).
+    const abertura = oferta.link
+      ? `Oi ${cliente.nome}! Vi essa oferta e lembrei de você: ${oferta.link}`
+      : `Oi ${cliente.nome}! Separei uma oferta que combina com você, já te mando a foto:`;
+    const texto = `${abertura}${oferta.observacoes ? `\n${oferta.observacoes}` : ''}\n\nQuer que eu reserve?`;
     window.open(waLinkWithText(cliente.telefone, texto), '_blank');
   }
 

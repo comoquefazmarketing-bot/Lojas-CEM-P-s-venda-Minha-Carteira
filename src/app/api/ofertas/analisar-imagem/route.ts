@@ -2,7 +2,12 @@ import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
-const PROMPT = 'Essa imagem é uma arte promocional de uma loja de móveis e eletrodomésticos (Lojas CEM). Responda APENAS com o nome do produto principal anunciado, de forma curta (ex: "Geladeira Brastemp 400L", "Ar-condicionado Philco 12000 BTU", "Sofá 3 lugares"). Se não conseguir identificar um produto, responda exatamente "Produto não identificado". Não escreva mais nada além do nome do produto.';
+const PROMPT = `Essa imagem é uma arte promocional de oferta de uma loja de móveis e eletrodomésticos (Lojas CEM). Leia com atenção todo o texto visível na imagem e extraia:
+
+- produto: o nome completo do produto, incluindo tipo, marca e modelo, exatamente como aparece na imagem (ex: "Panela de Pressão Elétrica Midea PPG70S", "Ar-Condicionado Philco PAC12 Inverter Frio 220V"). Nunca responda só com uma palavra genérica isolada (nunca só "Panela" ou só "TV") — sempre inclua marca e modelo se estiverem visíveis na imagem.
+- observacoes: um resumo curto (1 a 3 frases, pronto pra mandar num WhatsApp) com o preço à vista, o parcelamento (valor e quantidade de parcelas) se aparecerem na imagem, e as principais características técnicas listadas.
+
+Se não conseguir identificar nada de útil, responda com os dois campos como string vazia.`;
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -35,7 +40,15 @@ export async function POST(request: Request) {
               { inlineData: { mimeType, data: imagemBase64 } },
             ],
           }],
-          generationConfig: { maxOutputTokens: 64 },
+          generationConfig: {
+            maxOutputTokens: 400,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'OBJECT',
+              properties: { produto: { type: 'STRING' }, observacoes: { type: 'STRING' } },
+              required: ['produto', 'observacoes'],
+            },
+          },
         }),
       }
     );
@@ -49,8 +62,17 @@ export async function POST(request: Request) {
     }
 
     const data = await res.json();
-    const produto = (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim();
-    return new Response(JSON.stringify({ produto }), { status: 200, headers: { 'content-type': 'application/json' } });
+    const texto = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
+    let produto = '';
+    let observacoes = '';
+    try {
+      const parsed = JSON.parse(texto);
+      produto = (parsed?.produto ?? '').trim();
+      observacoes = (parsed?.observacoes ?? '').trim();
+    } catch {
+      // resposta fora do formato esperado — segue com campos vazios, sem quebrar o cadastro
+    }
+    return new Response(JSON.stringify({ produto, observacoes }), { status: 200, headers: { 'content-type': 'application/json' } });
   } catch {
     return new Response(JSON.stringify({ error: 'Não consegui analisar a imagem agora.' }), {
       status: 500, headers: { 'content-type': 'application/json' },
