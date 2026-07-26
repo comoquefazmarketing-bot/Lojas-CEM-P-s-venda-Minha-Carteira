@@ -905,7 +905,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
 
   async function handleNovaOfertaImagem(file: File | null) {
     setNovaOfertaImagem(file);
-    if (!file || novaOfertaProduto.trim()) return;
+    if (!file || (novaOfertaProduto.trim() && novaOfertaObs.trim())) return;
     setAnalisandoImagemOferta(true);
     try {
       const imagemBase64 = await fileParaBase64(file);
@@ -915,9 +915,10 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
         body: JSON.stringify({ imagemBase64, mimeType: file.type }),
       });
       const data = await res.json();
-      if (data?.produto && data.produto !== 'Produto não identificado') setNovaOfertaProduto(data.produto);
+      if (data?.produto && !novaOfertaProduto.trim()) setNovaOfertaProduto(data.produto);
+      if (data?.observacoes && !novaOfertaObs.trim()) setNovaOfertaObs(data.observacoes);
     } catch {
-      // silencioso — o vendedor sempre pode digitar o produto na mão
+      // silencioso — o vendedor sempre pode digitar produto/observação na mão
     } finally {
       setAnalisandoImagemOferta(false);
     }
@@ -991,9 +992,34 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     });
   }
 
+  async function baixarImagemOferta(oferta: Oferta) {
+    if (!oferta.imagem_url) return;
+    try {
+      const res = await fetch(oferta.imagem_url);
+      const blob = await res.blob();
+      const ext = (oferta.imagem_url.split('.').pop() || 'jpg').split('?')[0];
+      const base = normalizeText(oferta.produto).replace(/[^a-z0-9]+/g, '-').slice(0, 40) || 'oferta';
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${base}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      showToast('Não consegui baixar a imagem');
+    }
+  }
+
   function enviarOfertaWhatsApp(oferta: Oferta, cliente: Cliente) {
-    const linkParaMandar = oferta.link || oferta.imagem_url || '';
-    const texto = `Oi ${cliente.nome}! Vi essa oferta e lembrei de você: ${linkParaMandar}${oferta.observacoes ? `\n${oferta.observacoes}` : ''}\n\nQuer que eu reserve?`;
+    // nunca manda o link cru do Storage no texto — pra um cliente, uma URL de
+    // supabase.co sem contexto parece golpe. Se não tem link do Instagram, o
+    // vendedor anexa a foto na mão (a miniatura já abre em tamanho real pra salvar).
+    const abertura = oferta.link
+      ? `Oi ${cliente.nome}! Vi essa oferta e lembrei de você: ${oferta.link}`
+      : `Oi ${cliente.nome}! Separei uma oferta que combina com você, já te mando a foto:`;
+    const texto = `${abertura}${oferta.observacoes ? `\n${oferta.observacoes}` : ''}\n\nQuer que eu reserve?`;
     window.open(waLinkWithText(cliente.telefone, texto), '_blank');
   }
 
@@ -2031,8 +2057,8 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                     />
                     {analisandoImagemOferta ? 'Analisando imagem...' : (novaOfertaImagem ? novaOfertaImagem.name : 'Anexar arte (opcional)')}
                   </label>
-                  <button type="button" className="btn primary" disabled={enviandoOferta} onClick={handleAddOferta}>
-                    {enviandoOferta ? 'Enviando...' : 'Adicionar oferta'}
+                  <button type="button" className="btn primary" disabled={enviandoOferta || analisandoImagemOferta} onClick={handleAddOferta}>
+                    {enviandoOferta ? 'Enviando...' : (analisandoImagemOferta ? 'Lendo imagem...' : 'Adicionar oferta')}
                   </button>
                 </div>
 
@@ -2124,6 +2150,11 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                         </div>
                         {expandida && (
                           <div className="oferta-clientes">
+                            {oferta.imagem_url && (
+                              <button type="button" className="duplicado-btn merge" style={{ marginBottom: 10 }} onClick={() => baixarImagemOferta(oferta)}>
+                                <Download size={12} /> Baixar imagem
+                              </button>
+                            )}
                             {compativeis.length > 0 && (
                               <>
                                 <div className="oferta-clientes-title">Combina com:</div>
