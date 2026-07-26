@@ -65,9 +65,13 @@ export async function POST(request: Request) {
     if (!res.ok) {
       const corpoErro = await res.text().catch(() => '');
       console.error('Análise de oferta: erro da API do Gemini', res.status, corpoErro);
-      return new Response(JSON.stringify({ error: 'Não consegui analisar a imagem agora.' }), {
-        status: 502, headers: { 'content-type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          error: 'Não consegui analisar a imagem agora.',
+          debug: { geminiStatus: res.status, geminiBody: corpoErro.slice(0, 800) },
+        }),
+        { status: 502, headers: { 'content-type': 'application/json' } }
+      );
     }
 
     const data = await res.json();
