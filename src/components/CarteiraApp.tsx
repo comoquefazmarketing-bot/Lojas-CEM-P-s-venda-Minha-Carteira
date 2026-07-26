@@ -199,8 +199,33 @@ function normalizeText(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
+const MARCAS = [
+  'brastemp', 'consul', 'electrolux', 'lg', 'samsung', 'philco', 'midea', 'panasonic',
+  'fischer', 'continental', 'britania', 'mabe', 'esmaltec', 'springer', 'elgin', 'multilaser',
+  'aoc', 'sony', 'tcl', 'philips', 'semp', 'positivo',
+];
+
+/** Detecta se um "item" digitado é só tamanho/marca (ex: "43\" AOC"), não um produto à parte —
+ * senão ele rouba metade do valor da venda de categorização/comissão do produto real. */
+function ehApenasEspecificacao(item: string): boolean {
+  let t = normalizeText(item);
+  t = t.replace(/\d+\s*(["'”]|polegadas?)?/g, '');
+  MARCAS.forEach(m => { t = t.replace(new RegExp(`\\b${m}\\b`, 'g'), ''); });
+  t = t.replace(/[^a-z]/g, '');
+  return t.length === 0;
+}
+
 function splitProdutos(produto: string | null): string[] {
-  return (produto || '').split(',').map(s => s.trim()).filter(Boolean);
+  const brutos = (produto || '').split(',').map(s => s.trim()).filter(Boolean);
+  const itens: string[] = [];
+  brutos.forEach(seg => {
+    if (itens.length > 0 && ehApenasEspecificacao(seg)) {
+      itens[itens.length - 1] = `${itens[itens.length - 1]}, ${seg}`;
+    } else {
+      itens.push(seg);
+    }
+  });
+  return itens;
 }
 
 function categoriaProduto(produto: string | null): CategoriaProduto {
