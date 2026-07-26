@@ -116,6 +116,18 @@ Sem migração nova pra essa leva.
   vendedor de destino e transferir todos os clientes (e o histórico de anotações junto) de um
   vendedor pro outro — útil quando alguém troca de loja ou sai da empresa.
 
+## Novidades — Histórico de "dias até bater a meta"
+
+Rode **`supabase/migration_v14_metas_historico.sql`** no SQL Editor do Supabase (cria a tabela
+`metas_historico`, com RLS igual às outras).
+
+- Toda vez que a meta do mês é batida, o app grava sozinho (no momento exato, sem precisar anotar
+  na mão) em qual dia do mês isso aconteceu.
+- O card da meta mostra "Bateu em X dias esse mês" e um histórico dos últimos meses — útil pra
+  provar evolução de performance ao longo do tempo.
+- Sem essa migração o app funciona normal, só sem esse histórico (a meta batida e o confete
+  continuam funcionando do mesmo jeito).
+
 ## Estrutura
 
 ```

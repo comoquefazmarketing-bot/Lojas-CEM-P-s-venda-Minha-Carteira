@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { gerarRespostaJarbas, type JarbasContexto } from '@/lib/jarbas';
-import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao, Lembrete } from '@/types';
+import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao, Lembrete, MetaHistorico } from '@/types';
 
 /* ---------------------------------- utils ---------------------------------- */
 
@@ -1431,11 +1431,44 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
   const projecaoPctAnim = useCountUp(metaCalc.projecaoPct);
 
   const [showConfetti, setShowConfetti] = useState(false);
+  const [metasHistorico, setMetasHistorico] = useState<MetaHistorico[]>([]);
   const prevMetaPctRef = useRef(0);
+
+  const loadMetasHistorico = useCallback(async () => {
+    const { data } = await supabase.from('metas_historico').select('*').order('mes', { ascending: false }).limit(12);
+    if (data) setMetasHistorico(data as MetaHistorico[]);
+  }, [supabase]);
+  useEffect(() => { loadMetasHistorico(); }, [loadMetasHistorico]);
+
+  const metaBatidaEsteMes = useMemo(
+    () => metasHistorico.find(m => m.mes === monthKey(todayIso())) ?? null,
+    [metasHistorico]
+  );
+  const metaHistoricoAnterior = useMemo(
+    () => metasHistorico.filter(m => m.mes !== monthKey(todayIso())).slice(0, 5),
+    [metasHistorico]
+  );
+
+  async function registrarMetaBatida() {
+    if (!metaMensal) return;
+    const hoje = new Date();
+    await supabase.from('metas_historico').upsert(
+      {
+        mes: monthKey(todayIso()),
+        meta_mensal: metaMensal,
+        dia_meta_batida: hoje.getDate(),
+        data_meta_batida: todayIso(),
+      },
+      { onConflict: 'user_id,mes' }
+    );
+    loadMetasHistorico();
+  }
+
   useEffect(() => {
     if (metaCalc.pct >= 100 && prevMetaPctRef.current < 100) {
       setShowConfetti(true);
       const t = setTimeout(() => setShowConfetti(false), 3200);
+      registrarMetaBatida();
       prevMetaPctRef.current = metaCalc.pct;
       return () => clearTimeout(t);
     }
@@ -1638,6 +1671,26 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                   <Trophy size={16} className="meta-trophy" />
                 </div>
                 <div className="meta-numbers mono">{formatBRL(vendasMesAnim)} de {formatBRL(metaMensal)}</div>
+
+                {metaBatidaEsteMes && (
+                  <div className="meta-dias-batida">
+                    🏆 Bateu em {metaBatidaEsteMes.dia_meta_batida} dia{metaBatidaEsteMes.dia_meta_batida > 1 ? 's' : ''} esse mês
+                  </div>
+                )}
+
+                {metaHistoricoAnterior.length > 0 && (
+                  <div className="meta-historico">
+                    <div className="meta-historico-title">Histórico — dias até bater a meta</div>
+                    <div className="meta-historico-lista">
+                      {metaHistoricoAnterior.map(m => (
+                        <div key={m.mes} className="meta-historico-item">
+                          <span>{monthLabel(m.mes)}</span>
+                          <span className="mono">{m.dia_meta_batida} dia{m.dia_meta_batida > 1 ? 's' : ''}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="projecao-box">
                   <div className="projecao-label"><Rocket size={13} /> Projeção pro fim do mês, no seu ritmo atual</div>
