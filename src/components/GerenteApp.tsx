@@ -2,9 +2,12 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { LogOut, Users, TrendingUp, AlertTriangle, Target, ChevronDown } from 'lucide-react';
+import {
+  LogOut, Users, TrendingUp, AlertTriangle, Target, ChevronDown,
+  Repeat, ClipboardList, PhoneOff, Trophy, Pencil, Check, X,
+} from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { Cliente, STATUS } from '@/types';
+import { Cliente, Interacao, MetaHistorico, STATUS } from '@/types';
 
 function formatBRL(v: number | null | undefined) {
   const n = typeof v === 'number' ? v : parseFloat(String(v));
@@ -27,6 +30,12 @@ type VendedorResumo = {
   atrasados: number;
   prospects: number;
   pctMeta: number | null;
+  pctContribuicaoLoja: number | null;
+  conversoesMes: number;
+  taxaConversao: number | null;
+  interacoesMes: number;
+  followUpsVencidos: number;
+  diasMetaBatida: number | null;
 };
 
 export default function GerenteApp({ userEmail, userNome }: { userEmail: string; userNome?: string }) {
@@ -36,27 +45,61 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [configs, setConfigs] = useState<Configuracao[]>([]);
+  const [interacoes, setInteracoes] = useState<Interacao[]>([]);
+  const [metasHistorico, setMetasHistorico] = useState<MetaHistorico[]>([]);
   const [expandido, setExpandido] = useState<string | null>(null);
   const [usuarios, setUsuarios] = useState<UsuarioGerencia[]>([]);
   const [usuariosOpen, setUsuariosOpen] = useState(false);
   const [destinoTransferencia, setDestinoTransferencia] = useState<Record<string, string>>({});
   const [transferindo, setTransferindo] = useState<string | null>(null);
+  const [metaLoja, setMetaLoja] = useState<number | null>(null);
+  const [editandoMetaLoja, setEditandoMetaLoja] = useState(false);
+  const [metaLojaInput, setMetaLojaInput] = useState('');
+  const [salvandoMetaLoja, setSalvandoMetaLoja] = useState(false);
 
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const [{ data: c }, { data: p }, { data: cfg }] = await Promise.all([
+      const [{ data: c }, { data: p }, { data: cfg }, { data: intr }, { data: mh }] = await Promise.all([
         supabase.from('clientes').select('*'),
         supabase.from('profiles').select('user_id, email, nome, role'),
         supabase.from('configuracoes').select('user_id, meta_mensal'),
+        supabase.from('interacoes').select('*'),
+        supabase.from('metas_historico').select('*'),
       ]);
       setClientes((c as Cliente[]) ?? []);
       setProfiles((p as Profile[]) ?? []);
       setConfigs((cfg as Configuracao[]) ?? []);
+      setInteracoes((intr as Interacao[]) ?? []);
+      setMetasHistorico((mh as MetaHistorico[]) ?? []);
       setLoading(false);
     }
     load();
   }, [supabase]);
+
+  const loadMetaLoja = useCallback(async () => {
+    const res = await fetch('/api/gerente/meta-loja');
+    if (!res.ok) return;
+    const data = await res.json().catch(() => null);
+    setMetaLoja(typeof data?.valor === 'number' ? data.valor : null);
+  }, []);
+
+  useEffect(() => { loadMetaLoja(); }, [loadMetaLoja]);
+
+  async function handleSalvarMetaLoja() {
+    const valor = parseFloat(metaLojaInput.replace(/\./g, '').replace(',', '.'));
+    if (!valor || valor <= 0) { alert('Digita um valor válido pra meta da loja.'); return; }
+    setSalvandoMetaLoja(true);
+    const res = await fetch('/api/gerente/meta-loja', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ valor }),
+    });
+    setSalvandoMetaLoja(false);
+    if (!res.ok) { alert('Não consegui salvar a meta da loja.'); return; }
+    setEditandoMetaLoja(false);
+    loadMetaLoja();
+  }
 
   const loadUsuarios = useCallback(async () => {
     const res = await fetch('/api/gerente/usuarios');
@@ -107,7 +150,8 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
   }
 
   const vendedores: VendedorResumo[] = useMemo(() => {
-    const mesAtual = monthKey(todayIso());
+    const hojeIso = todayIso();
+    const mesAtual = monthKey(hojeIso);
     const metaPorUsuario = new Map(configs.map(c => [c.user_id, c.meta_mensal]));
     const vendedoresProfiles = profiles.filter(p => p.role !== 'gerente');
 
@@ -122,6 +166,27 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
         const prospects = clientesDoVendedor.filter(c => c.status === 'PROSPECT').length;
         const metaMensal = metaPorUsuario.get(p.user_id) ?? null;
         const pctMeta = metaMensal ? Math.min(100, (vendasMes / metaMensal) * 100) : null;
+        const pctContribuicaoLoja = metaLoja ? (vendasMes / metaLoja) * 100 : null;
+
+        const conversoesMes = clientesDoVendedor.filter(
+          c => c.data_conversao && monthKey(c.data_conversao) === mesAtual
+        ).length;
+        const convertidosTotal = clientesDoVendedor.filter(c => c.data_conversao).length;
+        const taxaConversao = (convertidosTotal + prospects) > 0
+          ? Math.round((convertidosTotal / (convertidosTotal + prospects)) * 100)
+          : null;
+
+        const interacoesMes = interacoes.filter(
+          it => it.user_id === p.user_id && it.data && monthKey(it.data) === mesAtual
+        ).length;
+
+        const followUpsVencidos = clientesDoVendedor.filter(
+          c => c.proximo_contato && c.proximo_contato <= hojeIso
+        ).length;
+
+        const metaBatidaEsseMes = metasHistorico.find(m => m.user_id === p.user_id && m.mes === mesAtual);
+        const diasMetaBatida = metaBatidaEsseMes?.dia_meta_batida ?? null;
+
         return {
           userId: p.user_id,
           nome: p.nome || p.email || '(sem nome)',
@@ -131,18 +196,25 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
           atrasados,
           prospects,
           pctMeta,
+          pctContribuicaoLoja,
+          conversoesMes,
+          taxaConversao,
+          interacoesMes,
+          followUpsVencidos,
+          diasMetaBatida,
         };
       })
       .sort((a, b) => b.vendasMes - a.vendasMes);
-  }, [clientes, profiles, configs]);
+  }, [clientes, profiles, configs, interacoes, metasHistorico, metaLoja]);
 
   const totais = useMemo(() => {
     const vendasMesTotal = vendedores.reduce((s, v) => s + v.vendasMes, 0);
     const atrasadosTotal = vendedores.reduce((s, v) => s + v.atrasados, 0);
     const prospectsTotal = vendedores.reduce((s, v) => s + v.prospects, 0);
     const metaTotal = vendedores.reduce((s, v) => s + (v.metaMensal || 0), 0);
-    return { vendasMesTotal, atrasadosTotal, prospectsTotal, metaTotal, qtdVendedores: vendedores.length };
-  }, [vendedores]);
+    const pctMetaLoja = metaLoja ? Math.min(100, (vendasMesTotal / metaLoja) * 100) : null;
+    return { vendasMesTotal, atrasadosTotal, prospectsTotal, metaTotal, pctMetaLoja, qtdVendedores: vendedores.length };
+  }, [vendedores, metaLoja]);
 
   if (loading) {
     return (
@@ -166,6 +238,46 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
         </div>
       </div>
 
+      <div className="meta-hero">
+        <div className="meta-hero-top">
+          <div className="meta-label"><Target size={15} /> Meta da loja — mês atual</div>
+          {editandoMetaLoja ? (
+            <div className="meta-hero-top-actions">
+              <input
+                autoFocus
+                className="meta-input"
+                value={metaLojaInput}
+                onChange={e => setMetaLojaInput(e.target.value)}
+                placeholder="1800000"
+              />
+              <button type="button" className="meta-set-btn" disabled={salvandoMetaLoja} onClick={handleSalvarMetaLoja}>
+                <Check size={13} /> {salvandoMetaLoja ? 'Salvando...' : 'Salvar'}
+              </button>
+              <button type="button" className="meta-set-btn" onClick={() => setEditandoMetaLoja(false)}><X size={13} /></button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="meta-set-btn"
+              onClick={() => { setMetaLojaInput(metaLoja ? String(metaLoja) : ''); setEditandoMetaLoja(true); }}
+            >
+              <Pencil size={12} /> {metaLoja ? 'Editar' : 'Definir meta'}
+            </button>
+          )}
+        </div>
+        {metaLoja ? (
+          <>
+            <div className="meta-pct-big mono">{totais.pctMetaLoja !== null ? `${Math.round(totais.pctMetaLoja)}%` : '—'}</div>
+            <div className="meta-track-big">
+              <div className="meta-fill-big" style={{ width: `${totais.pctMetaLoja ?? 0}%` }} />
+            </div>
+            <div className="meta-numbers mono">{formatBRL(totais.vendasMesTotal)} de {formatBRL(metaLoja)}</div>
+          </>
+        ) : (
+          <div className="gerente-vendedor-vazio">Nenhuma meta da loja definida ainda.</div>
+        )}
+      </div>
+
       <div className="stats-row">
         <div className="stat-card">
           <div className="stat-num mono">{formatBRL(totais.vendasMesTotal)}</div>
@@ -173,7 +285,7 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
         </div>
         <div className="stat-card gold">
           <div className="stat-num mono">{totais.metaTotal > 0 ? `${Math.min(100, Math.round((totais.vendasMesTotal / totais.metaTotal) * 100))}%` : '—'}</div>
-          <div className="stat-label"><Target size={12} /> Da meta somada</div>
+          <div className="stat-label"><Target size={12} /> Da meta somada (individual)</div>
         </div>
         <div className="stat-card danger">
           <div className="stat-num mono">{totais.atrasadosTotal}</div>
@@ -201,6 +313,7 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
                   <div className="gerente-vendedor-email">{v.nome}</div>
                   <div className="gerente-vendedor-sub mono">
                     {formatBRL(v.vendasMes)}{v.metaMensal ? ` de ${formatBRL(v.metaMensal)}` : ''}
+                    {v.pctContribuicaoLoja !== null && ` · ${v.pctContribuicaoLoja.toFixed(1)}% da meta da loja`}
                     {v.atrasados > 0 && <span className="gerente-vendedor-alerta"> · {v.atrasados} atrasado{v.atrasados > 1 ? 's' : ''}</span>}
                   </div>
                 </div>
@@ -211,6 +324,34 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
               )}
               {expandido === v.userId && (
                 <div className="gerente-vendedor-clientes">
+                  <div className="gerente-indicadores">
+                    <div className="gerente-indicador">
+                      <Target size={13} />
+                      <span>{v.pctContribuicaoLoja !== null ? `${v.pctContribuicaoLoja.toFixed(1)}%` : '—'} da meta da loja</span>
+                    </div>
+                    <div className="gerente-indicador">
+                      <Users size={13} />
+                      <span>{v.prospects} prospect{v.prospects !== 1 ? 's' : ''} ativo{v.prospects !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="gerente-indicador">
+                      <Repeat size={13} />
+                      <span>{v.conversoesMes} conversão{v.conversoesMes !== 1 ? 'ões' : ''} esse mês{v.taxaConversao !== null ? ` (${v.taxaConversao}% histórico)` : ''}</span>
+                    </div>
+                    <div className="gerente-indicador">
+                      <ClipboardList size={13} />
+                      <span>{v.interacoesMes} interaç{v.interacoesMes !== 1 ? 'ões' : 'ão'} de pós-venda esse mês</span>
+                    </div>
+                    <div className={`gerente-indicador${v.followUpsVencidos > 0 ? ' alerta' : ''}`}>
+                      <PhoneOff size={13} />
+                      <span>{v.followUpsVencidos} follow-up{v.followUpsVencidos !== 1 ? 's' : ''} vencido{v.followUpsVencidos !== 1 ? 's' : ''}</span>
+                    </div>
+                    {v.diasMetaBatida !== null && (
+                      <div className="gerente-indicador">
+                        <Trophy size={13} />
+                        <span>Bateu a meta em {v.diasMetaBatida} dia{v.diasMetaBatida !== 1 ? 's' : ''}</span>
+                      </div>
+                    )}
+                  </div>
                   {v.clientes.length === 0 ? (
                     <div className="gerente-vendedor-vazio">Ainda sem clientes cadastrados.</div>
                   ) : (
