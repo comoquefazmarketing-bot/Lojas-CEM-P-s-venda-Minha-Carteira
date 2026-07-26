@@ -2057,8 +2057,8 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                     />
                     {analisandoImagemOferta ? 'Analisando imagem...' : (novaOfertaImagem ? novaOfertaImagem.name : 'Anexar arte (opcional)')}
                   </label>
-                  <button type="button" className="btn primary" disabled={enviandoOferta} onClick={handleAddOferta}>
-                    {enviandoOferta ? 'Enviando...' : 'Adicionar oferta'}
+                  <button type="button" className="btn primary" disabled={enviandoOferta || analisandoImagemOferta} onClick={handleAddOferta}>
+                    {enviandoOferta ? 'Enviando...' : (analisandoImagemOferta ? 'Lendo imagem...' : 'Adicionar oferta')}
                   </button>
                 </div>
 
