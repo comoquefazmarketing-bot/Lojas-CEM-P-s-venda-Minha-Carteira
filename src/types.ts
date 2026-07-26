@@ -33,6 +33,16 @@ export interface Configuracoes {
   meta_outros: number | null;
 }
 
+export interface MetaHistorico {
+  id: string;
+  user_id?: string;
+  mes: string;
+  meta_mensal: number;
+  dia_meta_batida: number;
+  data_meta_batida: string;
+  criado_em?: string;
+}
+
 export interface Lembrete {
   id: string;
   user_id?: string;

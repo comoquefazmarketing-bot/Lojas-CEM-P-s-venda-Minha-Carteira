@@ -582,6 +582,18 @@ body::before {
 .meta-tick { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(35,40,58,0.35); z-index: 2; }
 .meta-trophy { position: absolute; right: -4px; top: -2px; color: rgba(250,246,236,0.55); z-index: 0; }
 .meta-numbers { font-size: 12.5px; color: rgba(250,246,236,0.85); margin-bottom: 14px; }
+.meta-dias-batida {
+  font-size: 12.5px; font-weight: 600; color: var(--brand-yellow); background: rgba(255,201,60,0.12);
+  border: 1px solid rgba(255,201,60,0.35); border-radius: 8px; padding: 6px 10px; margin-bottom: 12px;
+}
+.meta-historico { margin-bottom: 14px; }
+.meta-historico-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: rgba(250,246,236,0.6); margin-bottom: 6px; }
+.meta-historico-lista { display: flex; flex-direction: column; gap: 3px; }
+.meta-historico-item {
+  display: flex; justify-content: space-between; font-size: 12px; color: rgba(250,246,236,0.85);
+  padding: 3px 0; border-bottom: 1px solid rgba(250,246,236,0.1);
+}
+.meta-historico-item:last-child { border-bottom: none; }
 
 .projecao-box { margin-bottom: 14px; }
 .projecao-label {
