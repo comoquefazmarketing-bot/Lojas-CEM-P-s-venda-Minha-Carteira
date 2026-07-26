@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Plus, Phone, MessageCircle, X, Pencil, Trash2,
   Clock, Users, AlertTriangle, Download, LogOut, Flame,
@@ -16,6 +17,20 @@ import { gerarRespostaJarbas, type JarbasContexto } from '@/lib/jarbas';
 import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao } from '@/types';
 
 /* ---------------------------------- utils ---------------------------------- */
+
+const overlayMotion = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit: { opacity: 0 },
+  transition: { duration: 0.15 },
+};
+
+const modalMotion = {
+  initial: { opacity: 0, scale: 0.96, y: 12 },
+  animate: { opacity: 1, scale: 1, y: 0 },
+  exit: { opacity: 0, scale: 0.96, y: 12 },
+  transition: { duration: 0.18, ease: 'easeOut' as const },
+};
 
 function formatBRL(v: number | null | undefined) {
   const n = typeof v === 'number' ? v : parseFloat(String(v));
@@ -1867,9 +1882,10 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
             </>
           )}
 
+          <AnimatePresence>
           {formOpen && (
-            <div className="modal-overlay" onClick={() => setFormOpen(false)}>
-              <form className="modal" onClick={e => e.stopPropagation()} onSubmit={handleSave}>
+            <motion.div key="form-overlay" className="modal-overlay" onClick={() => setFormOpen(false)} {...overlayMotion}>
+              <motion.form key="form-modal" className="modal" onClick={e => e.stopPropagation()} onSubmit={handleSave} {...modalMotion}>
                 <div className="modal-header">
                   <span className="modal-title">{form.id ? 'Editar cliente' : 'Novo cliente'}</span>
                   <button type="button" className="close-btn" onClick={() => setFormOpen(false)}><X size={20} /></button>
@@ -2031,26 +2047,30 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                   <button type="button" className="btn ghost" onClick={() => setFormOpen(false)}>Cancelar</button>
                   <button type="submit" className="btn primary ripple-host" onClick={ripple}>Salvar</button>
                 </div>
-              </form>
-            </div>
+              </motion.form>
+            </motion.div>
           )}
+          </AnimatePresence>
 
+          <AnimatePresence>
           {confirmDelete && (
-            <div className="modal-overlay" onClick={() => setConfirmDelete(null)}>
-              <div className="modal" style={{ maxWidth: 360 }} onClick={e => e.stopPropagation()}>
+            <motion.div key="confirm-overlay" className="modal-overlay" onClick={() => setConfirmDelete(null)} {...overlayMotion}>
+              <motion.div key="confirm-modal" className="modal" style={{ maxWidth: 360 }} onClick={e => e.stopPropagation()} {...modalMotion}>
                 <div className="modal-title" style={{ marginBottom: 10 }}>Excluir cliente?</div>
                 <p style={{ color: 'var(--ink-soft)', fontSize: 13 }}>Essa ação não pode ser desfeita.</p>
                 <div className="modal-actions">
                   <button className="btn ghost" onClick={() => setConfirmDelete(null)}>Cancelar</button>
                   <button className="btn danger" onClick={() => handleDelete(confirmDelete)}>Excluir</button>
                 </div>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           )}
+          </AnimatePresence>
 
+          <AnimatePresence>
           {relatorioOpen && (
-            <div className="modal-overlay relatorio-modal-overlay" onClick={() => setRelatorioOpen(false)}>
-              <div className="modal" onClick={e => e.stopPropagation()}>
+            <motion.div key="relatorio-overlay" className="modal-overlay relatorio-modal-overlay" onClick={() => setRelatorioOpen(false)} {...overlayMotion}>
+              <motion.div key="relatorio-modal" className="modal" onClick={e => e.stopPropagation()} {...modalMotion}>
                 <div className="modal-header">
                   <span className="modal-title">Relatório mensal</span>
                   <div className="modal-header-actions">
@@ -2144,13 +2164,15 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                 <div className="modal-actions">
                   <button type="button" className="btn ghost" onClick={() => setRelatorioOpen(false)}>Fechar</button>
                 </div>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           )}
+          </AnimatePresence>
 
+          <AnimatePresence>
           {jarbasOpen && (
-            <div className="modal-overlay" onClick={() => setJarbasOpen(false)}>
-              <div className="modal jarbas-modal" onClick={e => e.stopPropagation()}>
+            <motion.div key="jarbas-overlay" className="modal-overlay" onClick={() => setJarbasOpen(false)} {...overlayMotion}>
+              <motion.div key="jarbas-modal" className="modal jarbas-modal" onClick={e => e.stopPropagation()} {...modalMotion}>
                 <div className="modal-header">
                   <span className="modal-title"><Bot size={18} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />Jarbas</span>
                   <button type="button" className="close-btn" onClick={() => setJarbasOpen(false)}><X size={20} /></button>
@@ -2179,9 +2201,10 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                     <Send size={16} />
                   </button>
                 </div>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           )}
+          </AnimatePresence>
 
           {toast && <div className="toast">{toast}</div>}
         </>
