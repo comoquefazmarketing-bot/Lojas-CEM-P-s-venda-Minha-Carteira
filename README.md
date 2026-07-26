@@ -188,6 +188,10 @@ tabela `meta_loja` e libera o gerente ler interações/histórico de meta de tod
   quantos dias bateu a meta esse mês (quando aplicável).
 - Sem essa migração, o painel do gerente continua funcionando normal, só sem a meta da loja e sem
   os indicadores de interação/histórico de meta (ficam sempre zerados).
+- Também: ao expandir um vendedor, mostra o **ritmo esperado pelo tempo** (proporcional aos dias
+  já passados do mês, comparado com o % da meta batido), os **produtos mais vendidos** por ele
+  (extraídos das vendas registradas), e a quantidade de **clientes por status** (Prospect, Ativo,
+  Atrasado, Negociando, Quitado). Sem migração nenhuma pra essa parte — usa dados que já existiam.
 
 ## Estrutura
 

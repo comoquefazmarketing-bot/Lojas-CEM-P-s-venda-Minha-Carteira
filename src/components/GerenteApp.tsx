@@ -7,7 +7,8 @@ import {
   Repeat, ClipboardList, PhoneOff, Trophy, Pencil, Check, X,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { Cliente, Interacao, MetaHistorico, STATUS } from '@/types';
+import { Cliente, Interacao, MetaHistorico, StatusKey, STATUS, STATUS_ORDER } from '@/types';
+import { splitProdutos } from '@/lib/produtos';
 
 function formatBRL(v: number | null | undefined) {
   const n = typeof v === 'number' ? v : parseFloat(String(v));
@@ -36,6 +37,9 @@ type VendedorResumo = {
   interacoesMes: number;
   followUpsVencidos: number;
   diasMetaBatida: number | null;
+  pctEsperadoPeloTempo: number;
+  statusBreakdown: Record<StatusKey, number>;
+  produtosMaisVendidos: { nome: string; qtd: number }[];
 };
 
 export default function GerenteApp({ userEmail, userNome }: { userEmail: string; userNome?: string }) {
@@ -187,6 +191,26 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
         const metaBatidaEsseMes = metasHistorico.find(m => m.user_id === p.user_id && m.mes === mesAtual);
         const diasMetaBatida = metaBatidaEsseMes?.dia_meta_batida ?? null;
 
+        const hoje = new Date();
+        const diasNoMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
+        const pctEsperadoPeloTempo = Math.min(100, (hoje.getDate() / diasNoMes) * 100);
+
+        const statusBreakdown = STATUS_ORDER.reduce((acc, s) => {
+          acc[s] = clientesDoVendedor.filter(c => c.status === s).length;
+          return acc;
+        }, {} as Record<StatusKey, number>);
+
+        const contagemProdutos = new Map<string, number>();
+        clientesDoVendedor.forEach(c => {
+          splitProdutos(c.produto).forEach(item => {
+            contagemProdutos.set(item, (contagemProdutos.get(item) ?? 0) + 1);
+          });
+        });
+        const produtosMaisVendidos = Array.from(contagemProdutos.entries())
+          .map(([nome, qtd]) => ({ nome, qtd }))
+          .sort((a, b) => b.qtd - a.qtd)
+          .slice(0, 5);
+
         return {
           userId: p.user_id,
           nome: p.nome || p.email || '(sem nome)',
@@ -202,6 +226,9 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
           interacoesMes,
           followUpsVencidos,
           diasMetaBatida,
+          pctEsperadoPeloTempo,
+          statusBreakdown,
+          produtosMaisVendidos,
         };
       })
       .sort((a, b) => b.vendasMes - a.vendasMes);
@@ -351,7 +378,40 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
                         <span>Bateu a meta em {v.diasMetaBatida} dia{v.diasMetaBatida !== 1 ? 's' : ''}</span>
                       </div>
                     )}
+                    {v.pctMeta !== null && v.diasMetaBatida === null && (
+                      <div className={`gerente-indicador${v.pctMeta < v.pctEsperadoPeloTempo ? ' alerta' : ''}`}>
+                        <TrendingUp size={13} />
+                        <span>
+                          {Math.round(v.pctMeta)}% da meta · esperado {Math.round(v.pctEsperadoPeloTempo)}% (proporcional aos dias do mês)
+                        </span>
+                      </div>
+                    )}
                   </div>
+
+                  {v.produtosMaisVendidos.length > 0 && (
+                    <div className="gerente-subsecao">
+                      <div className="gerente-subsecao-titulo">Produtos mais vendidos</div>
+                      <div className="gerente-indicadores">
+                        {v.produtosMaisVendidos.map(p => (
+                          <div key={p.nome} className="gerente-indicador">
+                            <span>{p.nome} · {p.qtd}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="gerente-subsecao">
+                    <div className="gerente-subsecao-titulo">Clientes por status</div>
+                    <div className="gerente-indicadores">
+                      {STATUS_ORDER.filter(s => v.statusBreakdown[s] > 0).map(s => (
+                        <div key={s} className="gerente-indicador">
+                          <span>{STATUS[s]?.label || s} · {v.statusBreakdown[s]}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   {v.clientes.length === 0 ? (
                     <div className="gerente-vendedor-vazio">Ainda sem clientes cadastrados.</div>
                   ) : (
