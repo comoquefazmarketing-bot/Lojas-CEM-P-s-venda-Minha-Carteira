@@ -1,9 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
-import { Cliente, StatusKey } from '@/types';
+import { Cliente, StatusKey, STATUS } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
-const SISTEMA_PROMPT_BASE = `Você é o Jarbas, assistente pessoal de vendas do Felipe, vendedor das Lojas CEM (móveis e eletrodomésticos, com pós-venda por carnê). Seu estilo é direto, estratégico e motivador — um parceiro de confiança, não um robô formal. Responda sempre em português do Brasil, em respostas curtas (no máximo 3-4 parágrafos curtos, ou uma lista objetiva quando fizer sentido) e SEMPRE termine o raciocínio — nunca corte uma frase pela metade. Escreva em texto puro, sem formatação markdown (sem **negrito**, sem #, sem colchetes) — a tela exibe exatamente o texto que você mandar. Baseie suas respostas de dados SOMENTE nos números fornecidos abaixo — nunca invente números, nomes ou situações que não estejam nos dados. Se não souber algo porque não está nos dados, diga isso.
+const SISTEMA_PROMPT_BASE = `Você é o Jarbas, assistente pessoal de vendas do Felipe, vendedor das Lojas CEM (móveis e eletrodomésticos, com pós-venda por carnê). Seu estilo é direto, estratégico e motivador — um parceiro de confiança, não um robô formal. Responda sempre em português do Brasil, em respostas curtas (no máximo 3-4 parágrafos curtos, ou uma lista objetiva quando fizer sentido) e SEMPRE termine o raciocínio — nunca corte uma frase pela metade. Escreva em texto puro, sem formatação markdown (sem **negrito**, sem #, sem colchetes) — a tela exibe exatamente o texto que você mandar. Você recebe abaixo o resumo da carteira E a lista completa de cada cliente com seus dados — use a lista completa pra responder perguntas específicas (quem comprou tal produto, qual o maior valor, quando foi a compra, etc.), fazendo você mesmo a busca/comparação/ranking necessário. Baseie suas respostas de dados SOMENTE nas informações fornecidas abaixo — nunca invente números, nomes ou situações que não estejam nos dados. Se não souber algo porque não está nos dados, diga isso.
 
 Você conhece a metodologia de vendas que a própria Lojas CEM ensina aos vendedores (treinamento "Foco — Formação Comercial por Resultados") e deve usá-la como referência sempre que der conselho estratégico ou de abordagem — não invente outro método de vendas genérico.
 
@@ -65,6 +65,40 @@ function buildResumo(clientes: Cliente[], metaMensal: number | null): string {
   ].join('\n');
 }
 
+function formatDateBR(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function buildClientesDetalhado(clientes: Cliente[]): string {
+  const nomePorId = new Map(clientes.map(c => [c.id, c.nome]));
+  return clientes
+    .map(c => {
+      const campos: string[] = [`status: ${STATUS[c.status]?.label ?? c.status}`];
+      if (c.produto) campos.push(`produto: ${c.produto}`);
+      if (c.valor_total) campos.push(`valor total: R$ ${c.valor_total.toFixed(2)}`);
+      if (c.forma_pagamento === 'PARCELADO' && c.valor_parcela) {
+        const parcelas = c.numero_parcelas ? ` em ${c.numero_parcelas}x` : '';
+        const venc = c.dia_vencimento ? `, vence dia ${c.dia_vencimento}` : '';
+        campos.push(`parcela: R$ ${c.valor_parcela.toFixed(2)}${parcelas}${venc}`);
+      }
+      const dataCompra = formatDateBR(c.data_compra);
+      if (dataCompra) campos.push(`comprou em: ${dataCompra}`);
+      const proxContato = formatDateBR(c.proximo_contato);
+      if (proxContato) campos.push(`próximo contato: ${proxContato}`);
+      const ultContato = formatDateBR(c.ultimo_contato);
+      if (ultContato) campos.push(`último contato: ${ultContato}`);
+      const aniversario = formatDateBR(c.data_nascimento);
+      if (aniversario) campos.push(`aniversário: ${aniversario}`);
+      if (c.indicado_por && nomePorId.has(c.indicado_por)) campos.push(`indicado por: ${nomePorId.get(c.indicado_por)}`);
+      if (c.telefone) campos.push(`telefone: ${c.telefone}`);
+      if (c.observacoes) campos.push(`obs: "${c.observacoes}"`);
+      return `- ${c.nome} — ${campos.join(' | ')}`;
+    })
+    .join('\n');
+}
+
 function buildPrioridades(clientes: Cliente[]): string {
   const hojeIso = new Date().toISOString().slice(0, 10);
   const lista: string[] = [];
@@ -98,8 +132,9 @@ export async function POST(request: Request) {
   const clientes = (clientesData ?? []) as Cliente[];
   const resumo = buildResumo(clientes, configData?.meta_mensal ?? null);
   const prioridades = buildPrioridades(clientes);
+  const clientesDetalhado = buildClientesDetalhado(clientes);
 
-  const systemPrompt = `${SISTEMA_PROMPT_BASE}\n\nRESUMO DA CARTEIRA HOJE:\n${resumo}\n\nQUEM PRECISA DE ATENÇÃO HOJE:\n${prioridades}`;
+  const systemPrompt = `${SISTEMA_PROMPT_BASE}\n\nRESUMO DA CARTEIRA HOJE:\n${resumo}\n\nQUEM PRECISA DE ATENÇÃO HOJE:\n${prioridades}\n\nLISTA COMPLETA DE CLIENTES:\n${clientesDetalhado}`;
 
   try {
     const model = 'gemini-flash-latest';
