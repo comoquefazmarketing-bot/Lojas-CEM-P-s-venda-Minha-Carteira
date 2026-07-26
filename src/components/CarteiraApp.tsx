@@ -915,10 +915,17 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
         body: JSON.stringify({ imagemBase64, mimeType: file.type }),
       });
       const data = await res.json();
+      if (!res.ok || data?.error) {
+        console.error('Análise de oferta falhou', res.status, data);
+        showToast(data?.error || 'Não consegui ler a imagem — preenche o produto na mão');
+        return;
+      }
       if (data?.produto && !novaOfertaProduto.trim()) setNovaOfertaProduto(data.produto);
       if (data?.observacoes && !novaOfertaObs.trim()) setNovaOfertaObs(data.observacoes);
-    } catch {
-      // silencioso — o vendedor sempre pode digitar produto/observação na mão
+      if (!data?.produto && !data?.observacoes) showToast('Não identifiquei o produto na imagem — preenche na mão');
+    } catch (err) {
+      console.error('Análise de oferta falhou', err);
+      showToast('Não consegui ler a imagem — preenche o produto na mão');
     } finally {
       setAnalisandoImagemOferta(false);
     }

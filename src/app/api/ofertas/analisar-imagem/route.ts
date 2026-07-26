@@ -44,8 +44,8 @@ export async function POST(request: Request) {
             maxOutputTokens: 400,
             responseMimeType: 'application/json',
             responseSchema: {
-              type: 'OBJECT',
-              properties: { produto: { type: 'STRING' }, observacoes: { type: 'STRING' } },
+              type: 'object',
+              properties: { produto: { type: 'string' }, observacoes: { type: 'string' } },
               required: ['produto', 'observacoes'],
             },
           },
