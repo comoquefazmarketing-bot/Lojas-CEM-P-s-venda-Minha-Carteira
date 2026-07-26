@@ -805,7 +805,16 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     }
   }, [supabase]);
 
-  useEffect(() => { loadClients(); loadConfig(); }, [loadClients, loadConfig]);
+  const loadJarbasMessages = useCallback(async () => {
+    const { data } = await supabase
+      .from('jarbas_mensagens')
+      .select('role, content')
+      .order('criado_em', { ascending: true })
+      .limit(200);
+    if (data) setJarbasMessages(data as { role: 'user' | 'assistant'; content: string }[]);
+  }, [supabase]);
+
+  useEffect(() => { loadClients(); loadConfig(); loadJarbasMessages(); }, [loadClients, loadConfig, loadJarbasMessages]);
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 2400); }
 
@@ -959,6 +968,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     setJarbasMessages(historico);
     setJarbasInput('');
     setJarbasLoading(true);
+    void supabase.from('jarbas_mensagens').insert({ role: 'user', content: texto });
 
     const contexto: JarbasContexto = {
       metaMensal,
@@ -973,19 +983,22 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
       prioridadesHoje: acaoDoDia.map(a => ({ nome: a.cliente.nome, motivo: a.motivo })),
     };
 
-    // Tenta o Jarbas "de verdade" (Claude + dados reais da carteira). Se a API não
-    // estiver configurada ou falhar, cai pra base de conhecimento local (sem IA).
+    // Tenta o Jarbas "de verdade" (Gemini + dados reais da carteira, com memória das
+    // conversas anteriores). Se a API não estiver configurada ou falhar, cai pra base
+    // de conhecimento local (sem IA). Manda só as últimas mensagens pro modelo — o
+    // histórico completo fica salvo no banco, mas não precisa virar contexto infinito.
     try {
       let usouIA = false;
       try {
         const res = await fetch('/api/jarbas', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ messages: historico }),
+          body: JSON.stringify({ messages: historico.slice(-30) }),
         });
         const data = await res.json().catch(() => null);
         if (res.ok && data?.reply) {
           setJarbasMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+          void supabase.from('jarbas_mensagens').insert({ role: 'assistant', content: data.reply });
           usouIA = true;
         }
       } catch {
@@ -995,6 +1008,7 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
       if (!usouIA) {
         const resposta = gerarRespostaJarbas(texto, contexto);
         setJarbasMessages(prev => [...prev, { role: 'assistant', content: resposta }]);
+        void supabase.from('jarbas_mensagens').insert({ role: 'assistant', content: resposta });
       }
     } finally {
       setJarbasLoading(false);

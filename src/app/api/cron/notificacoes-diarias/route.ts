@@ -61,12 +61,6 @@ export async function GET(request: Request) {
     const listaIncompletos = incompletosPorUsuario.get(userId) ?? [];
     if (listaContatos.length === 0 && listaIncompletos.length === 0) continue;
 
-    const { data: subs } = await supabase
-      .from('push_subscriptions')
-      .select('*')
-      .eq('user_id', userId);
-    if (!subs || subs.length === 0) continue;
-
     const partes: string[] = [];
     if (listaContatos.length > 0) {
       const nomes = listaContatos.slice(0, 3).map((c) => c.nome).join(', ');
@@ -80,6 +74,21 @@ export async function GET(request: Request) {
     const title = listaContatos.length > 0
       ? `${listaContatos.length} cliente${listaContatos.length > 1 ? 's' : ''} pra ligar hoje`
       : `${listaIncompletos.length} cadastro${listaIncompletos.length > 1 ? 's' : ''} incompleto${listaIncompletos.length > 1 ? 's' : ''}`;
+
+    // grava o "bom dia" no histórico do Jarbas — assim, quando abrir o chat, ele já
+    // aparece tendo avisado sozinho, com memória contínua entre um dia e outro.
+    // Roda independente de ter push habilitado, pra memória não depender de notificação.
+    await supabase.from('jarbas_mensagens').insert({
+      user_id: userId,
+      role: 'assistant',
+      content: `Bom dia, Felipe! ${partes.join(' · ')}.`,
+    });
+
+    const { data: subs } = await supabase
+      .from('push_subscriptions')
+      .select('*')
+      .eq('user_id', userId);
+    if (!subs || subs.length === 0) continue;
 
     const payload = JSON.stringify({ title, body: partes.join(' · '), url: '/carteira' });
 

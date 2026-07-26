@@ -69,6 +69,17 @@ O que foi adicionado e por quê:
 - **Data de nascimento**: campo opcional que alimenta o alerta de aniversário na Ação do Dia e o
   script de parabéns.
 
+## Novidades — Memória do Jarbas
+
+Rode **`supabase/migration_v11_jarbas_memoria.sql`** no SQL Editor do Supabase (cria a tabela
+`jarbas_mensagens`, com RLS igual às outras — cada um só vê a própria conversa).
+
+- O Jarbas agora lembra das conversas de um dia pro outro, em vez de esquecer tudo ao fechar o chat.
+- Todo dia, o cron de notificações (`api/cron/notificacoes-diarias`) grava um "Bom dia" no histórico
+  do Jarbas com as prioridades do dia — na próxima vez que você abrir o chat, ele já aparece lá.
+- Sem essa migração o app continua funcionando normalmente, só que sem memória (cada conversa
+  recomeça do zero).
+
 ## Estrutura
 
 ```
