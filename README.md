@@ -141,6 +141,20 @@ com RLS igual às outras).
   mandar a mesma oferta pra ele.
 - Sem essa migração o app funciona normal, só sem esse painel.
 
+## Novidades — Anexar arte (imagem) na oferta
+
+Rode **`supabase/migration_v16_ofertas_imagem.sql`** no SQL Editor do Supabase (depois da v15 —
+adiciona a coluna `imagem_url`, torna `link` opcional e cria o bucket público `ofertas` no
+Storage).
+
+- Ao cadastrar (ou editar) uma oferta, dá pra anexar uma imagem (a arte da promoção) em vez do —
+  ou além do — link do Instagram. Pelo menos um dos dois precisa existir.
+- A imagem aparece em miniatura no card da oferta; clicar nela abre em tamanho real numa aba nova.
+- O botão de WhatsApp usa o link do Instagram se tiver, senão usa o link da própria imagem — o
+  cliente sempre recebe algo clicável pra ver a oferta.
+- Sem essa migração o resto do painel de Ofertas continua funcionando normal, só sem o anexo de
+  imagem.
+
 ## Estrutura
 
 ```
