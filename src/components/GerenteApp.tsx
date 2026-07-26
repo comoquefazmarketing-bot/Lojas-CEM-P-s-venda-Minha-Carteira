@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut, Users, TrendingUp, AlertTriangle, Target, ChevronDown } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -16,6 +16,7 @@ function todayIso() { return new Date().toISOString().slice(0, 10); }
 
 type Profile = { user_id: string; email: string | null; role: string };
 type Configuracao = { user_id: string; meta_mensal: number | null };
+type UsuarioGerencia = { user_id: string; email: string | null; role: string; ativo: boolean; criado_em: string };
 
 type VendedorResumo = {
   userId: string;
@@ -36,6 +37,8 @@ export default function GerenteApp({ userEmail }: { userEmail: string }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [configs, setConfigs] = useState<Configuracao[]>([]);
   const [expandido, setExpandido] = useState<string | null>(null);
+  const [usuarios, setUsuarios] = useState<UsuarioGerencia[]>([]);
+  const [usuariosOpen, setUsuariosOpen] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -52,6 +55,29 @@ export default function GerenteApp({ userEmail }: { userEmail: string }) {
     }
     load();
   }, [supabase]);
+
+  const loadUsuarios = useCallback(async () => {
+    const res = await fetch('/api/gerente/usuarios');
+    if (!res.ok) return;
+    const data = await res.json().catch(() => null);
+    if (data?.usuarios) setUsuarios(data.usuarios);
+  }, []);
+
+  useEffect(() => { loadUsuarios(); }, [loadUsuarios]);
+
+  async function alterarUsuario(userId: string, update: { ativo?: boolean; role?: string }) {
+    const res = await fetch('/api/gerente/usuarios', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, ...update }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      alert(data?.error || 'Não consegui atualizar esse usuário.');
+      return;
+    }
+    loadUsuarios();
+  }
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -182,6 +208,38 @@ export default function GerenteApp({ userEmail }: { userEmail: string }) {
               )}
             </div>
           ))
+        )}
+      </div>
+
+      <div className="gerente-ranking">
+        <button type="button" className="tendencia-header tendencia-header-toggle" onClick={() => setUsuariosOpen(o => !o)}>
+          <div className="gerente-ranking-title" style={{ marginBottom: 0 }}>Usuários com acesso ({usuarios.length})</div>
+          <ChevronDown size={16} style={{ transform: usuariosOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease' }} />
+        </button>
+        {usuariosOpen && (
+          <div style={{ marginTop: 10 }}>
+            {usuarios.length === 0 ? (
+              <div className="gerente-vendedor-vazio">Nenhum usuário encontrado.</div>
+            ) : (
+              usuarios.map(u => (
+                <div key={u.user_id} className="usuario-row">
+                  <div className="usuario-info">
+                    <span className="usuario-email">{u.email || '(sem email)'}</span>
+                    <span className={`usuario-badge ${u.role}`}>{u.role === 'gerente' ? 'Gerente' : 'Vendedor'}</span>
+                    <span className={`usuario-badge ${u.ativo ? 'ativo' : 'inativo'}`}>{u.ativo ? 'Ativo' : 'Desativado'}</span>
+                  </div>
+                  <div className="usuario-actions">
+                    <button type="button" className="usuario-btn" onClick={() => alterarUsuario(u.user_id, { role: u.role === 'gerente' ? 'vendedor' : 'gerente' })}>
+                      {u.role === 'gerente' ? 'Rebaixar a vendedor' : 'Promover a gerente'}
+                    </button>
+                    <button type="button" className={`usuario-btn ${u.ativo ? 'perigo' : ''}`} onClick={() => alterarUsuario(u.user_id, { ativo: !u.ativo })}>
+                      {u.ativo ? 'Desativar' : 'Reativar'}
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         )}
       </div>
     </div>

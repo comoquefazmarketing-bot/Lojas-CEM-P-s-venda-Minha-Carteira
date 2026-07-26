@@ -90,6 +90,19 @@ Rode **`supabase/migration_v12_lembretes.sql`** no SQL Editor do Supabase (cria 
   push nem do app aberto no horário exato — ele aparece na próxima vez que você abrir o app).
 - Clica em "Concluído" pra tirar da lista depois de resolver.
 
+## Novidades — Controle de acesso (gerente)
+
+Rode **`supabase/migration_v13_controle_acesso.sql`** no SQL Editor do Supabase (adiciona a
+coluna `ativo` na tabela `profiles`).
+
+- Quem tem o papel `gerente` agora vê uma seção "Usuários com acesso" no painel gerencial, com
+  todo mundo que já criou conta — dá pra **promover/rebaixar** (vendedor ↔ gerente) e
+  **ativar/desativar** o acesso de qualquer um, direto pela tela (sem precisar mexer no Supabase).
+- Vendedor desativado é deslogado automaticamente e não consegue mais entrar (aparece um aviso na
+  tela de login) — útil quando alguém sai da empresa.
+- **Transparência de dados**: o Jarbas agora avisa, embaixo da caixa de mensagem, que as perguntas
+  e os dados de clientes usados nas respostas são enviados pra API do Google Gemini.
+
 ## Estrutura
 
 ```

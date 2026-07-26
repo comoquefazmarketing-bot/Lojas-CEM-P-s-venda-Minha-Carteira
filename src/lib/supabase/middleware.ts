@@ -39,6 +39,17 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (user && isCarteira) {
+    const { data: profile } = await supabase.from('profiles').select('ativo').eq('user_id', user.id).maybeSingle();
+    if (profile?.ativo === false) {
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      url.searchParams.set('desativado', '1');
+      return NextResponse.redirect(url);
+    }
+  }
+
   if (user && isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = '/carteira';
