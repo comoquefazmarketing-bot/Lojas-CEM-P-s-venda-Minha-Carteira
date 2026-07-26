@@ -49,7 +49,8 @@ export async function POST(request: Request) {
             ],
           }],
           generationConfig: {
-            maxOutputTokens: 400,
+            maxOutputTokens: 1024,
+            thinkingConfig: { thinkingBudget: 0 },
             responseMimeType: 'application/json',
             responseSchema: {
               type: 'object',
