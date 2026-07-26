@@ -908,6 +908,14 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
     if (!cliente.indicado_por && prospect.indicado_por) backfill.indicado_por = prospect.indicado_por;
     if (!cliente.observacoes && prospect.observacoes) backfill.observacoes = prospect.observacoes;
     if (!cliente.data_nascimento && prospect.data_nascimento) backfill.data_nascimento = prospect.data_nascimento;
+    // sem isso o cliente nunca contaria como "convertido" nas métricas de funil/Jarbas,
+    // mesmo depois de remover o prospect duplicado
+    if (!cliente.data_conversao) backfill.data_conversao = cliente.data_compra || todayIso();
+    // preserva a data real do primeiro contato (quando virou prospect), senão o ciclo médio de
+    // conversão fica artificialmente curto (contaria a partir da data do cadastro manual do cliente)
+    if (prospect.criado_em && (!cliente.criado_em || prospect.criado_em < cliente.criado_em)) {
+      backfill.criado_em = prospect.criado_em;
+    }
 
     if (Object.keys(backfill).length > 0) {
       const { error } = await supabase.from('clientes').update(backfill).eq('id', cliente.id);
@@ -2163,7 +2171,8 @@ export default function CarteiraApp({ userEmail }: { userEmail: string }) {
                 <p style={{ color: 'var(--ink-soft)', fontSize: 13 }}>
                   O prospect <strong>{confirmMerge.prospect.nome}</strong> será removido e qualquer dado que faltar
                   em <strong>{confirmMerge.cliente.nome}</strong> (indicação, observações, aniversário) será copiado
-                  pra lá. As anotações do prospect também são movidas. Essa ação não pode ser desfeita.
+                  pra lá. As anotações do prospect também são movidas, e o cliente passa a contar como
+                  convertido nas métricas de funil. Essa ação não pode ser desfeita.
                 </p>
                 <div className="modal-actions">
                   <button className="btn ghost" onClick={() => setConfirmMerge(null)}>Cancelar</button>
