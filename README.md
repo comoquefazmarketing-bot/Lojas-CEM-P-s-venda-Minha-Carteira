@@ -193,6 +193,15 @@ tabela `meta_loja` e libera o gerente ler interações/histórico de meta de tod
   (extraídos das vendas registradas), e a quantidade de **clientes por status** (Prospect, Ativo,
   Atrasado, Negociando, Quitado). Sem migração nenhuma pra essa parte — usa dados que já existiam.
 
+## Novidades — Importar Listagem Loja (na Carteira do vendedor)
+
+Sem migração nova — usa a mesma tabela `clientes` já existente (os leads viram prospects comuns,
+já aparecem na lista/kanban normal).
+
+- Nova seção "Listagem Loja" na Carteira (junto com Ofertas, Lembretes, etc.): cola uma lista de
+  leads — um por linha, no formato `nome;telefone;observação opcional` — e importa tudo de uma vez
+  como prospect. Útil pra importar relatórios de indicação/agradecimento do sistema da loja.
+
 ## Estrutura
 
 ```

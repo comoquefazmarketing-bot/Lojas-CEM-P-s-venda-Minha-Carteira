@@ -495,6 +495,11 @@ body::before {
 .usuario-btn:disabled { opacity:0.5; cursor:not-allowed; }
 .usuario-select { font-size:11.5px; padding:5px 8px; border-radius:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink); max-width:170px; }
 
+.listagem-import-textarea {
+  width:100%; border:1px solid var(--line); border-radius:8px; padding:10px; font-size:12.5px;
+  font-family:'IBM Plex Mono',monospace; background:var(--surface); color:var(--ink); margin-bottom:8px; resize:vertical;
+}
+
 .oferta-form { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
 .oferta-form input {
   flex:1; min-width:140px; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:13px;

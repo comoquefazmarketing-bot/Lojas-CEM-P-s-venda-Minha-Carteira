@@ -638,6 +638,9 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
   const [lembreteDataHoraInput, setLembreteDataHoraInput] = useState('');
   const [ofertas, setOfertas] = useState<Oferta[]>([]);
   const [ofertasOpen, setOfertasOpen] = useState(false);
+  const [listagemLojaOpen, setListagemLojaOpen] = useState(false);
+  const [importLojaTexto, setImportLojaTexto] = useState('');
+  const [importandoLoja, setImportandoLoja] = useState(false);
   const [novaOfertaProduto, setNovaOfertaProduto] = useState('');
   const [novaOfertaLink, setNovaOfertaLink] = useState('');
   const [novaOfertaObs, setNovaOfertaObs] = useState('');
@@ -767,6 +770,26 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     else setClients(data as Cliente[]);
     if (!opts?.silent) setLoading(false);
   }, [supabase]);
+
+  async function handleImportarListaLoja() {
+    const linhas = importLojaTexto.split('\n').map(l => l.trim()).filter(Boolean);
+    if (linhas.length === 0) { showToast('Cola pelo menos uma linha antes de importar'); return; }
+    const registros = linhas.map(linha => {
+      const partes = linha.split(';').map(p => p.trim());
+      const nome = partes[0] || '';
+      const telefone = partes[1] || '';
+      const observacoes = partes.slice(2).filter(Boolean).join(' · ') || null;
+      return { nome, telefone, status: 'PROSPECT' as const, observacoes };
+    }).filter(r => r.nome && r.telefone);
+    if (registros.length === 0) { showToast('Nenhuma linha válida — usa nome;telefone;observação'); return; }
+    setImportandoLoja(true);
+    const { error } = await supabase.from('clientes').insert(registros);
+    setImportandoLoja(false);
+    if (error) { showToast('Não consegui importar a lista'); return; }
+    setImportLojaTexto('');
+    showToast(`${registros.length} lead(s) importado(s) como prospect`);
+    loadClients();
+  }
 
   const loadConfig = useCallback(async () => {
     const { data } = await supabase.from('configuracoes').select('meta_mensal, meta_moveis, meta_tv, meta_outros').maybeSingle();
@@ -2143,6 +2166,31 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                     );
                   })
                 )}
+              </div>
+            )}
+          </div>
+
+          <div className="tendencia-card">
+            <button type="button" className="tendencia-header tendencia-header-toggle" onClick={() => setListagemLojaOpen(o => !o)}>
+              <div className="tendencia-title"><Users size={15} /> Listagem Loja</div>
+              <ChevronDown size={16} style={{ transform: listagemLojaOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease' }} />
+            </button>
+            {listagemLojaOpen && (
+              <div style={{ marginTop: 10 }}>
+                <p className="gerente-vendedor-vazio" style={{ marginBottom: 8 }}>
+                  Cola uma lista de leads (um por linha, no formato <code>nome;telefone;observação opcional</code> —
+                  ex: de relatórios de indicação da loja) e importa tudo de uma vez como prospect.
+                </p>
+                <textarea
+                  className="listagem-import-textarea"
+                  rows={4}
+                  placeholder={'Ex:\nJose da Silva;17999999999;indicado por Maria, conta 1175.208\nAna Paula;17988888888;'}
+                  value={importLojaTexto}
+                  onChange={e => setImportLojaTexto(e.target.value)}
+                />
+                <button type="button" className="btn primary" disabled={importandoLoja} onClick={handleImportarListaLoja}>
+                  {importandoLoja ? 'Importando...' : 'Importar lista'}
+                </button>
               </div>
             )}
           </div>
