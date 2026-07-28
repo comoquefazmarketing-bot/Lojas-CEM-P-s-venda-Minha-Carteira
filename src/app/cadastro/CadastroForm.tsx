@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { validarSenha } from '@/lib/senha';
 
 function ripple(e: React.MouseEvent<HTMLElement>) {
   const target = e.currentTarget;
@@ -31,6 +32,11 @@ export default function CadastroForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    const erroSenha = validarSenha(senha);
+    if (erroSenha) {
+      setError(erroSenha);
+      return;
+    }
     if (senha !== confirmar) {
       setError('As senhas não são iguais.');
       return;
@@ -89,11 +95,12 @@ export default function CadastroForm() {
           </div>
           <div className="auth-field">
             <label>Senha</label>
-            <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required minLength={6} />
+            <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required minLength={8} />
+            <span className="auth-field-hint">Pelo menos 8 caracteres, com letra e número.</span>
           </div>
           <div className="auth-field">
             <label>Confirmar senha</label>
-            <input type="password" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} required minLength={6} />
+            <input type="password" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} required minLength={8} />
           </div>
           <div className="auth-field">
             <label>Código de convite</label>

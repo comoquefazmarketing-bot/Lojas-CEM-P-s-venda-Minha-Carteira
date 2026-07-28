@@ -279,6 +279,7 @@ body::before {
   border-color: var(--gold);
   box-shadow: 0 0 0 3px rgba(242,96,12,0.15);
 }
+.auth-field-hint { font-size: 11px; color: var(--ink-soft); }
 .auth-error {
   background: var(--pastel-rust);
   color: var(--rust);

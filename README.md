@@ -230,6 +230,21 @@ Levantamento feito nas rotas da API (`src/app/api/**/route.ts`):
   "aberto" de propósito — um problema na tabela de controle não pode derrubar login/cadastro) só
   que sem limite nenhum de tentativas até a migração rodar.
 
+## Novidades — Senha forte e cabeçalhos de segurança HTTP
+
+Sem migração nova.
+
+- **Senha mínima mais forte**: de 6 pra 8 caracteres, exigindo pelo menos uma letra e um número
+  (checado tanto na tela de cadastro quanto na API, que é a validação que realmente vale).
+- **Cabeçalhos de segurança HTTP** em todas as respostas (`next.config.mjs`):
+  - `Content-Security-Policy`: só permite carregar script/imagem/fonte/conexão do próprio site,
+    das fontes do Google e do próprio projeto Supabase — bloqueia injeção de script de origem
+    externa (XSS) e impede o site de ser carregado dentro de um `<iframe>` de outro site
+    (clickjacking).
+  - `X-Frame-Options: DENY` e `X-Content-Type-Options: nosniff`.
+  - `Strict-Transport-Security` (força HTTPS) e `Referrer-Policy`.
+  - `Permissions-Policy` bloqueando câmera/microfone/geolocalização, que o app não usa.
+
 ## Estrutura
 
 ```
