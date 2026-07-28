@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
-import { createClient as createAdminClient } from '@supabase/supabase-js';
+
+export { adminClient } from '@/lib/supabase/admin';
 
 export async function exigirGerente() {
   const supabase = await createClient();
@@ -10,8 +11,4 @@ export async function exigirGerente() {
   if (profile?.role !== 'gerente') return { erro: new Response('Só gerentes têm acesso a essa área', { status: 403 }) };
 
   return { user };
-}
-
-export function adminClient() {
-  return createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }

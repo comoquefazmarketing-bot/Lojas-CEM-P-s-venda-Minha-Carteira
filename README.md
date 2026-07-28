@@ -202,6 +202,34 @@ já aparecem na lista/kanban normal).
   leads — um por linha, no formato `nome;telefone;observação opcional` — e importa tudo de uma vez
   como prospect. Útil pra importar relatórios de indicação/agradecimento do sistema da loja.
 
+## Novidades — Camadas de segurança contra força bruta e abuso
+
+Rode **`supabase/migration_v19_rate_limit.sql`** no SQL Editor do Supabase (cria a tabela
+`rate_limit_tentativas` e restringe o bucket `ofertas` a imagens até 15MB).
+
+Levantamento feito nas rotas da API (`src/app/api/**/route.ts`):
+
+- **Login (senha)**: passa direto pela API do Supabase Auth (`signInWithPassword`), que já tem
+  limite de tentativas por padrão na própria infraestrutura deles — não precisa de código extra
+  aqui.
+- **`/api/convite` (código de convite)** — esse era o ponto real de risco: não tinha nenhum limite
+  de tentativas, dava pra tentar milhares de códigos por script até acertar. Agora:
+  - Máximo de 8 tentativas a cada 15 minutos por IP (tabela `rate_limit_tentativas`, sem precisar
+    de Redis ou infraestrutura extra).
+  - Comparação do código em tempo constante (`timingSafeEqual`), pra não vazar informação por
+    quanto tempo a resposta demora (timing attack).
+- **`/api/jarbas` e `/api/ofertas/analisar-imagem`** (chamam a API do Gemini, que tem custo): já
+  exigiam login; agora também têm limite por pessoa (30 mensagens/10min no Jarbas, 20
+  imagens/10min na análise de oferta) — protege contra custo alto mesmo com uma conta já
+  autenticada comprometida ou usada de forma abusiva.
+- **Bucket `ofertas` no Storage**: estava sem limite de tamanho nem tipo de arquivo definido
+  (aceitava qualquer coisa até 50MB). Agora só aceita imagens (jpeg/png/webp/gif) até 15MB.
+- **Rotas `/api/gerente/*`**: já exigiam checar o papel de gerente no banco a cada chamada (não só
+  confiar no que a tela mostra) — confirmado, sem mudança necessária.
+- Sem essa migração, essas rotas continuam funcionando normal (o helper de rate limit falha
+  "aberto" de propósito — um problema na tabela de controle não pode derrubar login/cadastro) só
+  que sem limite nenhum de tentativas até a migração rodar.
+
 ## Estrutura
 
 ```

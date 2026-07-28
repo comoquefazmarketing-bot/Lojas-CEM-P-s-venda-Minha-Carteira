@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { Cliente, StatusKey, STATUS } from '@/types';
+import { dentroDoLimite } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -113,6 +114,16 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new Response('Não autorizado', { status: 401 });
+
+  // no máximo 30 mensagens a cada 10 minutos por pessoa — evita custo alto de API
+  // mesmo com uma conta já autenticada (comprometida ou mal-intencionada)
+  const podeUsar = await dentroDoLimite(`jarbas:${user.id}`, 30, 10);
+  if (!podeUsar) {
+    return new Response(
+      JSON.stringify({ error: 'Muitas mensagens em pouco tempo — espera alguns minutos e tenta de novo.' }),
+      { status: 429, headers: { 'content-type': 'application/json' } }
+    );
+  }
 
   if (!process.env.GEMINI_API_KEY) {
     return new Response(
