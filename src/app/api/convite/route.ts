@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { timingSafeEqual } from 'crypto';
 import { dentroDoLimite, ipDoRequest } from '@/lib/rateLimit';
+import { validarSenha } from '@/lib/senha';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,8 +34,9 @@ export async function POST(request: Request) {
       status: 400, headers: { 'content-type': 'application/json' },
     });
   }
-  if (senha.length < 6) {
-    return new Response(JSON.stringify({ error: 'A senha precisa ter pelo menos 6 caracteres.' }), {
+  const erroSenha = validarSenha(senha);
+  if (erroSenha) {
+    return new Response(JSON.stringify({ error: erroSenha }), {
       status: 400, headers: { 'content-type': 'application/json' },
     });
   }
