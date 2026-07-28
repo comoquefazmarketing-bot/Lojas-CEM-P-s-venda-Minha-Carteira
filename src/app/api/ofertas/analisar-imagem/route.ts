@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { dentroDoLimite } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,14 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new Response('Não autorizado', { status: 401 });
+
+  const podeUsar = await dentroDoLimite(`analisar-imagem:${user.id}`, 20, 10);
+  if (!podeUsar) {
+    return new Response(
+      JSON.stringify({ error: 'Muitas imagens analisadas em pouco tempo — espera alguns minutos.' }),
+      { status: 429, headers: { 'content-type': 'application/json' } }
+    );
+  }
 
   if (!process.env.GEMINI_API_KEY) {
     return new Response(JSON.stringify({ error: 'IA não configurada' }), {
