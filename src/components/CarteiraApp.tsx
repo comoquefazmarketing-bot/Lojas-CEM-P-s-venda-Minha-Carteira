@@ -188,6 +188,34 @@ const PROSPECT_SCRIPTS: Record<ProspectScriptKey, ScriptDef> = {
   },
 };
 
+// indicado pela loja — cliente que acabou de quitar o carnê, ainda não é cliente
+// "novo" de fato: o foco é parabenizar e descobrir o próximo produto de interesse,
+// não repetir os scripts genéricos de prospect (que pressupõem interesse já sinalizado)
+type IndicadoLojaScriptKey = 'parabenizacao' | 'reforco' | 'convite' | 'condicao';
+
+const INDICADO_LOJA_SCRIPTS: Record<IndicadoLojaScriptKey, ScriptDef> = {
+  parabenizacao: {
+    label: 'Parabenizar + perguntar próxima compra',
+    icon: Gift,
+    build: (nome) => `Oi ${firstName(nome)}! Aqui é o Felipe, das Lojas CEM 🎉 Parabéns por quitar seu carnê! Fico muito feliz que você confiou na gente. Aproveitando, me conta: qual vai ser o próximo produto pra sua casa? Assim já separo as melhores condições pra você!`,
+  },
+  reforco: {
+    label: 'Reforçar (sem resposta)',
+    icon: MessageCircle,
+    build: (nome) => `Oi ${firstName(nome)}, tudo bem? Aqui é o Felipe, das Lojas CEM. Fiquei pensando em você depois que quitou o carnê — já tem em mente algo novo pra casa? Geladeira, TV, sofá, guarda-roupa... me conta que eu já vejo a melhor condição!`,
+  },
+  convite: {
+    label: 'Convite pra loja',
+    icon: MapPin,
+    build: (nome) => `Oi ${firstName(nome)}! Já que seu carnê tá quitadinho, seu crédito na loja já libera de novo 🎉 Que tal passar aqui essa semana pra ver as novidades de pertinho? Qual dia fica melhor pra você?`,
+  },
+  condicao: {
+    label: 'Condição especial (bom pagador)',
+    icon: BadgePercent,
+    build: (nome) => `${firstName(nome)}, boa notícia! Como você é um ótimo pagador, consegui liberar uma condição especial pra sua próxima compra — entrada facilitada e parcelas que cabem certinho no seu bolso. Me conta o que você tá precisando que eu já te mando os detalhes!`,
+  },
+};
+
 function waLinkWithText(telefone: string, text: string) {
   const digits = onlyDigits(telefone);
   const phone = digits.length > 0 && digits.length <= 11 ? `55${digits}` : digits;
@@ -322,11 +350,14 @@ function WaMenu({ c, onClose, anchorRect }: { c: Cliente; onClose: () => void; a
   };
 
   const isProspect = c.status === 'PROSPECT';
-  const scripts: ScriptDef[] = isProspect ? Object.values(PROSPECT_SCRIPTS) : Object.values(SCRIPTS);
+  const isIndicadoLoja = c.origem === 'Indicado pela loja';
+  const scripts: ScriptDef[] = isIndicadoLoja
+    ? Object.values(INDICADO_LOJA_SCRIPTS)
+    : isProspect ? Object.values(PROSPECT_SCRIPTS) : Object.values(SCRIPTS);
 
   return createPortal(
     <div className="wa-menu" style={style} onClick={(e) => e.stopPropagation()}>
-      <div className="wa-menu-title">{isProspect ? 'Trazer pra loja' : 'Escolha o script'}</div>
+      <div className="wa-menu-title">{isIndicadoLoja ? 'Parabenizar e oferecer' : isProspect ? 'Trazer pra loja' : 'Escolha o script'}</div>
       {scripts.map((s) => {
         const Icon = s.icon;
         return (
@@ -2519,7 +2550,9 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                         className="mini-btn wa-mini"
                         href={waLinkWithText(
                           cliente.telefone,
-                          cliente.status === 'PROSPECT'
+                          cliente.origem === 'Indicado pela loja'
+                            ? INDICADO_LOJA_SCRIPTS.parabenizacao.build(cliente.nome, cliente.produto)
+                            : cliente.status === 'PROSPECT'
                             ? PROSPECT_SCRIPTS.abordagem.build(cliente.nome, cliente.produto)
                             : SCRIPTS.posvenda.build(cliente.nome, cliente.produto)
                         )}
