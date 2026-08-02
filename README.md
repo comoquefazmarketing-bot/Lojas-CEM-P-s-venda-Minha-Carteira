@@ -269,6 +269,20 @@ Corrigido criando dois jeitos seguros de lidar com data:
   "hora local" ali, não seria a hora do Brasil. Usa `Intl.DateTimeFormat` com fuso
   `America/Sao_Paulo` explícito, testado e confirmado batendo certo perto da virada do dia.
 
+## Novidades — Histórico Mensal (com ajuste manual pra meses incompletos)
+
+Rode **`supabase/migration_v20_vendas_historico_mensal.sql`** no SQL Editor do Supabase (cria a
+tabela `vendas_historico_mensal`).
+
+- Novo painel "Histórico Mensal" na Carteira: mostra os últimos 6 meses de vendas.
+- Por padrão, cada mês soma automaticamente os clientes cadastrados com `data_compra` naquele mês
+  (igual já era feito só pro mês atual).
+- Se um mês não teve toda venda lançada individualmente no app (ex: perdeu o ritmo de cadastro
+  num mês corrido), dá pra **ajustar manualmente** o total daquele mês — sem precisar criar
+  cliente fictício nenhum. O ajuste fica marcado como "ajustado manualmente" na lista, pra não se
+  confundir com o valor calculado de verdade.
+- Sem essa migração, o painel mostra só o total calculado automático (sem opção de ajustar).
+
 ## Estrutura
 
 ```

@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { gerarRespostaJarbas, type JarbasContexto } from '@/lib/jarbas';
-import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao, Lembrete, MetaHistorico, Oferta } from '@/types';
+import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao, Lembrete, MetaHistorico, Oferta, VendaHistoricoMensal } from '@/types';
 import {
   type CategoriaProduto, CATEGORIA_LABELS, CATEGORIA_TAXA, CATEGORIA_ORDEM, SALARIO_MINIMO_GARANTIDO,
   PRODUTOS_SUGERIDOS, normalizeText, splitProdutos, categoriaProduto, valorPorCategoria, comissaoVenda,
@@ -657,6 +657,12 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
   const [listagemLojaOpen, setListagemLojaOpen] = useState(false);
   const [importLojaTexto, setImportLojaTexto] = useState('');
   const [importandoLoja, setImportandoLoja] = useState(false);
+  const [vendasHistoricoMensal, setVendasHistoricoMensal] = useState<VendaHistoricoMensal[]>([]);
+  const [historicoMensalOpen, setHistoricoMensalOpen] = useState(false);
+  const [editandoMesHistorico, setEditandoMesHistorico] = useState<string | null>(null);
+  const [mesHistoricoInput, setMesHistoricoInput] = useState('');
+  const [valorHistoricoInput, setValorHistoricoInput] = useState('');
+  const [salvandoHistoricoMensal, setSalvandoHistoricoMensal] = useState(false);
   const [novaOfertaProduto, setNovaOfertaProduto] = useState('');
   const [novaOfertaLink, setNovaOfertaLink] = useState('');
   const [novaOfertaObs, setNovaOfertaObs] = useState('');
@@ -805,6 +811,39 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     setImportLojaTexto('');
     showToast(`${registros.length} lead(s) importado(s) como prospect`);
     loadClients();
+  }
+
+  const loadVendasHistoricoMensal = useCallback(async () => {
+    const { data } = await supabase.from('vendas_historico_mensal').select('*').order('mes', { ascending: false });
+    if (data) setVendasHistoricoMensal(data as VendaHistoricoMensal[]);
+  }, [supabase]);
+  useEffect(() => { loadVendasHistoricoMensal(); }, [loadVendasHistoricoMensal]);
+
+  function handleStartEditHistoricoMensal(mes: string, valorAtual?: number) {
+    setEditandoMesHistorico(mes || 'novo');
+    setMesHistoricoInput(mes);
+    setValorHistoricoInput(valorAtual ? String(valorAtual) : '');
+  }
+
+  async function handleSalvarHistoricoMensal() {
+    if (!/^\d{4}-\d{2}$/.test(mesHistoricoInput)) { showToast('Mês inválido — usa o formato AAAA-MM'); return; }
+    const valor = parseFloat(valorHistoricoInput.replace(/\./g, '').replace(',', '.'));
+    if (!valor || valor <= 0) { showToast('Digita um valor válido'); return; }
+    setSalvandoHistoricoMensal(true);
+    const { error } = await supabase.from('vendas_historico_mensal').upsert(
+      { mes: mesHistoricoInput, valor_total: valor, observacoes: 'Ajustado manualmente' },
+      { onConflict: 'user_id,mes' }
+    );
+    setSalvandoHistoricoMensal(false);
+    if (error) { showToast('Não consegui salvar'); return; }
+    setEditandoMesHistorico(null);
+    loadVendasHistoricoMensal();
+  }
+
+  async function handleExcluirHistoricoMensal(mes: string) {
+    const { error } = await supabase.from('vendas_historico_mensal').delete().eq('mes', mes);
+    if (error) { showToast('Não consegui excluir'); return; }
+    setVendasHistoricoMensal(prev => prev.filter(v => v.mes !== mes));
   }
 
   const loadConfig = useCallback(async () => {
@@ -1394,6 +1433,32 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
       return sum;
     }, 0);
   }, [enriched]);
+
+  /** Últimos 6 meses: usa o ajuste manual se existir pro mês, senão soma direto dos
+   * clientes cadastrados (o jeito normal) — assim um mês com lançamento incompleto
+   * (ex: julho) pode ser corrigido sem mexer em cadastro de cliente nenhum. */
+  const historicoMensal = useMemo(() => {
+    const overridePorMes = new Map(vendasHistoricoMensal.map(v => [v.mes, v]));
+    const somaPorMesClientes = new Map<string, number>();
+    clients.forEach(c => {
+      if (!c.data_compra || !c.valor_total) return;
+      const key = monthKey(c.data_compra);
+      somaPorMesClientes.set(key, (somaPorMesClientes.get(key) ?? 0) + c.valor_total);
+    });
+    const hoje = new Date();
+    const meses: { mes: string; valor: number; manual: boolean }[] = [];
+    for (let i = 0; i < 6; i++) {
+      const ref = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      const key = `${ref.getFullYear()}-${String(ref.getMonth() + 1).padStart(2, '0')}`;
+      const override = overridePorMes.get(key);
+      meses.push({
+        mes: key,
+        valor: override ? override.valor_total : (somaPorMesClientes.get(key) ?? 0),
+        manual: !!override,
+      });
+    }
+    return meses;
+  }, [clients, vendasHistoricoMensal]);
 
   const comissaoMes = useMemo(() => {
     const now = new Date();
@@ -2207,6 +2272,65 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                 <button type="button" className="btn primary" disabled={importandoLoja} onClick={handleImportarListaLoja}>
                   {importandoLoja ? 'Importando...' : 'Importar lista'}
                 </button>
+              </div>
+            )}
+          </div>
+
+          <div className="tendencia-card">
+            <button type="button" className="tendencia-header tendencia-header-toggle" onClick={() => setHistoricoMensalOpen(o => !o)}>
+              <div className="tendencia-title"><TrendingUp size={15} /> Histórico Mensal</div>
+              <ChevronDown size={16} style={{ transform: historicoMensalOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease' }} />
+            </button>
+            {historicoMensalOpen && (
+              <div style={{ marginTop: 10 }}>
+                <p className="gerente-vendedor-vazio" style={{ marginBottom: 8 }}>
+                  Por padrão soma direto dos clientes cadastrados. Se algum mês não teve toda venda
+                  lançada individualmente, dá pra ajustar o total manualmente.
+                </p>
+                <div className="duplicados-lista" style={{ marginTop: 0 }}>
+                  {historicoMensal.map(h => {
+                    const editando = editandoMesHistorico === h.mes;
+                    const label = monthLabel(h.mes);
+                    const labelCap = label.charAt(0).toUpperCase() + label.slice(1);
+                    if (editando) {
+                      return (
+                        <div key={h.mes} className="oferta-form" style={{ padding: 10 }}>
+                          <span style={{ alignSelf: 'center', fontSize: 13, fontWeight: 600 }}>{labelCap}</span>
+                          <input
+                            autoFocus
+                            placeholder="Valor total (ex: 64000)"
+                            value={valorHistoricoInput}
+                            onChange={e => setValorHistoricoInput(e.target.value)}
+                          />
+                          <button type="button" className="btn primary" disabled={salvandoHistoricoMensal} onClick={handleSalvarHistoricoMensal}>
+                            <Check size={13} /> {salvandoHistoricoMensal ? 'Salvando...' : 'Salvar'}
+                          </button>
+                          <button type="button" className="btn" onClick={() => setEditandoMesHistorico(null)}><X size={13} /></button>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={h.mes} className="duplicado-item">
+                        <div className="duplicado-info">
+                          <span className="duplicado-nome">{labelCap}</span>
+                          <span className="duplicado-status mono">
+                            {formatBRL(h.valor)}{h.manual ? ' · ajustado manualmente' : ''}
+                          </span>
+                        </div>
+                        <div className="duplicado-actions">
+                          <button type="button" className="duplicado-btn merge" onClick={() => handleStartEditHistoricoMensal(h.mes, h.valor)}>
+                            <Pencil size={12} /> {h.manual ? 'Editar' : 'Ajustar'}
+                          </button>
+                          {h.manual && (
+                            <button type="button" className="duplicado-btn" onClick={() => handleExcluirHistoricoMensal(h.mes)}>
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
