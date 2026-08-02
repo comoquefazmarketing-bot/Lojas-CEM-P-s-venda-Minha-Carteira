@@ -21,6 +21,7 @@ export interface Cliente {
   indicado_por: string | null;
   ultimo_contato: string | null;
   data_conversao: string | null;
+  origem: string | null;
   criado_em?: string;
   atualizado_em?: string;
 }

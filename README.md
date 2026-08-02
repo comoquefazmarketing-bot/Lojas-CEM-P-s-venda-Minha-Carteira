@@ -295,6 +295,22 @@ Agora `diasRestantes` conta só dias úteis (segunda a sábado) de hoje até o f
 na tela também muda pra "dias úteis restantes" pra deixar claro. Testado isoladamente comparando
 contagem de dias corridos vs dias úteis num mês real.
 
+## Novidades — Categoria "Indicados pela loja"
+
+Rode **`supabase/migration_v21_origem_cliente.sql`** no SQL Editor do Supabase (adiciona a
+coluna `origem` em `clientes`).
+
+- Pedido real: categorizar clientes que vieram de relatórios de indicação da própria loja
+  (geralmente gente que acabou de quitar o carnê em outra compra).
+- Toda importação pelo painel **Listagem Loja** já marca automaticamente o lead como "Indicado
+  pela loja" — sem precisar fazer nada extra.
+- Novo chip de filtro **"Indicados pela loja"** na lista de clientes, pra separar esse grupo e
+  chamar no WhatsApp especificamente.
+- A etiqueta aparece direto no card do cliente (junto com "indicado por", quando tiver).
+- Também dá pra marcar manualmente qualquer cliente com uma origem (campo "Origem" no
+  cadastro/edição) — não fica restrito só à importação em massa.
+- Sem essa migração, os campos de origem/filtro não têm efeito (o app funciona normal fora isso).
+
 ## Estrutura
 
 ```
