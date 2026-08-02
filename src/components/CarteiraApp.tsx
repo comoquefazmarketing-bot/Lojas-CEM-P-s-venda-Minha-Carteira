@@ -1292,6 +1292,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     if (!cliente.indicado_por && prospect.indicado_por) backfill.indicado_por = prospect.indicado_por;
     if (!cliente.observacoes && prospect.observacoes) backfill.observacoes = prospect.observacoes;
     if (!cliente.data_nascimento && prospect.data_nascimento) backfill.data_nascimento = prospect.data_nascimento;
+    if (!cliente.origem && prospect.origem) backfill.origem = prospect.origem;
     // sem isso o cliente nunca contaria como "convertido" nas métricas de funil/Jarbas,
     // mesmo depois de remover o prospect duplicado
     if (!cliente.data_conversao) backfill.data_conversao = cliente.data_compra || todayIso();
