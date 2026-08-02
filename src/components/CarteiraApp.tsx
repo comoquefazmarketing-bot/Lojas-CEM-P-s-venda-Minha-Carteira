@@ -222,6 +222,27 @@ function waLinkWithText(telefone: string, text: string) {
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
 }
 
+// disparo em massa — junta os 3 grupos de scripts numa lista só, com chave
+// prefixada (grupo:chave) pra alimentar um único <select> no modal de disparo
+type ScriptOption = { key: string; label: string; group: string; def: ScriptDef };
+
+const DISPARO_SCRIPT_OPTIONS: ScriptOption[] = [
+  ...Object.entries(SCRIPTS).map(([key, def]) => ({ key: `cliente:${key}`, label: def.label, group: 'Cliente', def })),
+  ...Object.entries(PROSPECT_SCRIPTS).map(([key, def]) => ({ key: `prospect:${key}`, label: def.label, group: 'Prospect', def })),
+  ...Object.entries(INDICADO_LOJA_SCRIPTS).map(([key, def]) => ({ key: `indicado:${key}`, label: def.label, group: 'Indicado pela loja', def })),
+];
+
+const DISPARO_SCRIPT_BY_KEY: Record<string, ScriptDef> = Object.fromEntries(
+  DISPARO_SCRIPT_OPTIONS.map(o => [o.key, o.def])
+);
+
+/** script padrão pra um cliente quando o disparo em massa está no modo "Automático" */
+function scriptAutoPara(c: Cliente): ScriptDef {
+  if (c.origem === 'Indicado pela loja') return INDICADO_LOJA_SCRIPTS.parabenizacao;
+  if (c.status === 'PROSPECT') return PROSPECT_SCRIPTS.abordagem;
+  return SCRIPTS.posvenda;
+}
+
 /* ------------------------------- tipos derivados ------------------------------- */
 
 type EnrichedCliente = Cliente & {
@@ -686,6 +707,12 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
   const [diaSelecionado, setDiaSelecionado] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [disparoOpen, setDisparoOpen] = useState(false);
+  const [disparoClientes, setDisparoClientes] = useState<Cliente[]>([]);
+  const [disparoIndex, setDisparoIndex] = useState(0);
+  const [disparoScriptKey, setDisparoScriptKey] = useState('auto');
+  const [disparoMsg, setDisparoMsg] = useState('');
+  const [disparoEnviados, setDisparoEnviados] = useState<Set<string>>(new Set());
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [viewMode, setViewMode] = useState<'lista' | 'kanban'>('lista');
   const [jarbasOpen, setJarbasOpen] = useState(false);
@@ -806,6 +833,42 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     setSelectionMode(false);
     loadClients({ silent: true });
   }
+
+  function abrirDisparoMassa() {
+    const alvo = filtered.filter(c => selectedIds.has(c.id));
+    if (alvo.length === 0) { showToast('Selecione pelo menos um cliente'); return; }
+    setDisparoClientes(alvo);
+    setDisparoIndex(0);
+    setDisparoScriptKey('auto');
+    setDisparoEnviados(new Set());
+    setDisparoOpen(true);
+  }
+
+  function fecharDisparoMassa() {
+    setDisparoOpen(false);
+    if (disparoEnviados.size > 0) {
+      loadClients({ silent: true });
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+    }
+  }
+
+  async function handleDisparoEnviar() {
+    const c = disparoClientes[disparoIndex];
+    if (!c) return;
+    window.open(waLinkWithText(c.telefone, disparoMsg), '_blank', 'noopener,noreferrer');
+    setDisparoEnviados(prev => new Set(prev).add(c.id));
+    await supabase.from('clientes').update({ ultimo_contato: todayIso() }).eq('id', c.id);
+    setDisparoIndex(i => i + 1);
+  }
+
+  useEffect(() => {
+    if (!disparoOpen) return;
+    const c = disparoClientes[disparoIndex];
+    if (!c) return;
+    const script = disparoScriptKey === 'auto' ? scriptAutoPara(c) : (DISPARO_SCRIPT_BY_KEY[disparoScriptKey] || scriptAutoPara(c));
+    setDisparoMsg(script.build(c.nome, c.produto));
+  }, [disparoOpen, disparoIndex, disparoScriptKey, disparoClientes]);
 
   async function handleAtivarNotificacoes() {
     try {
@@ -2683,6 +2746,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                 <span className="selection-bar-count">{selectedIds.size} selecionado{selectedIds.size > 1 ? 's' : ''}</span>
                 <div className="selection-bar-actions">
                   <button type="button" className="btn-cancel" onClick={toggleSelectionMode}>Cancelar</button>
+                  <button type="button" className="btn-disparo" onClick={abrirDisparoMassa}><Send size={13} /> Disparo em massa</button>
                   <button type="button" className="btn-confirm" onClick={handleMarcarContatoLote}><Check size={13} /> Marcar contato feito</button>
                 </div>
               </div>
@@ -3066,6 +3130,70 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                 <p className="jarbas-disclaimer">
                   Suas perguntas e dados de clientes são enviados pra API do Google Gemini pra gerar as respostas.
                 </p>
+              </motion.div>
+            </motion.div>
+          )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+          {disparoOpen && (
+            <motion.div key="disparo-overlay" className="modal-overlay" onClick={fecharDisparoMassa} {...overlayMotion}>
+              <motion.div key="disparo-modal" className="modal disparo-modal" onClick={e => e.stopPropagation()} {...modalMotion}>
+                <div className="modal-header">
+                  <span className="modal-title"><Send size={18} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />Disparo em massa</span>
+                  <button type="button" className="close-btn" onClick={fecharDisparoMassa}><X size={20} /></button>
+                </div>
+
+                {disparoIndex >= disparoClientes.length ? (
+                  <div className="disparo-summary">
+                    <Check size={32} color="var(--gold)" />
+                    <p>
+                      <strong>{disparoEnviados.size}</strong> de {disparoClientes.length} mensagem{disparoClientes.length > 1 ? 's' : ''} enviada{disparoEnviados.size === 1 ? '' : 's'}.
+                    </p>
+                    <button type="button" className="btn primary" onClick={fecharDisparoMassa}>Concluir</button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="disparo-progress">
+                      <div className="disparo-progress-track">
+                        <div className="disparo-progress-fill" style={{ width: `${(disparoIndex / disparoClientes.length) * 100}%` }} />
+                      </div>
+                      <span className="disparo-progress-label">
+                        {disparoIndex + 1} de {disparoClientes.length} · {disparoEnviados.size} enviado{disparoEnviados.size === 1 ? '' : 's'}
+                      </span>
+                    </div>
+
+                    <div className="form-field full" style={{ marginBottom: 10 }}>
+                      <label>Script</label>
+                      <select value={disparoScriptKey} onChange={e => setDisparoScriptKey(e.target.value)}>
+                        <option value="auto">Automático (recomendado)</option>
+                        {['Cliente', 'Prospect', 'Indicado pela loja'].map(grupo => (
+                          <optgroup key={grupo} label={grupo}>
+                            {DISPARO_SCRIPT_OPTIONS.filter(o => o.group === grupo).map(o => (
+                              <option key={o.key} value={o.key}>{o.label}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="disparo-client">
+                      <strong>{disparoClientes[disparoIndex]?.nome}</strong>
+                      <span className="disparo-client-phone">{disparoClientes[disparoIndex]?.telefone}</span>
+                    </div>
+
+                    <div className="form-field full">
+                      <label>Mensagem</label>
+                      <textarea value={disparoMsg} onChange={e => setDisparoMsg(e.target.value)} rows={5} />
+                    </div>
+
+                    <div className="modal-actions">
+                      <button type="button" className="btn ghost" disabled={disparoIndex === 0} onClick={() => setDisparoIndex(i => Math.max(0, i - 1))}>Voltar</button>
+                      <button type="button" className="btn ghost" onClick={() => setDisparoIndex(i => i + 1)}>Pular</button>
+                      <button type="button" className="btn primary" onClick={handleDisparoEnviar}><Send size={14} /> Enviar</button>
+                    </div>
+                  </>
+                )}
               </motion.div>
             </motion.div>
           )}
