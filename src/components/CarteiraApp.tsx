@@ -10,7 +10,7 @@ import {
   Snowflake, Star, Target, Check, Gift, Repeat, Handshake,
   ChevronDown, Zap, CalendarDays, Wallet, Trophy, TrendingUp, Coins, ClipboardList, Bell, Rocket,
   ListChecks, Activity, BarChart3, PhoneOff, MapPin, BadgePercent, ShoppingBag, Funnel, Sun, Moon,
-  KanbanSquare, List, Bot, Send,
+  KanbanSquare, List, Bot, Send, HelpCircle,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { gerarRespostaJarbas, type JarbasContexto } from '@/lib/jarbas';
@@ -19,6 +19,9 @@ import {
   type CategoriaProduto, CATEGORIA_LABELS, CATEGORIA_TAXA, CATEGORIA_ORDEM, SALARIO_MINIMO_GARANTIDO,
   PRODUTOS_SUGERIDOS, normalizeText, splitProdutos, categoriaProduto, valorPorCategoria, comissaoVenda,
 } from '@/lib/produtos';
+import { HelpTip } from '@/components/HelpTip';
+import { ConfirmModal } from '@/components/ConfirmModal';
+import { OnboardingTour } from '@/components/OnboardingTour';
 
 /* ---------------------------------- utils ---------------------------------- */
 
@@ -188,10 +191,59 @@ const PROSPECT_SCRIPTS: Record<ProspectScriptKey, ScriptDef> = {
   },
 };
 
+// indicado pela loja — cliente que acabou de quitar o carnê, ainda não é cliente
+// "novo" de fato: o foco é parabenizar e descobrir o próximo produto de interesse,
+// não repetir os scripts genéricos de prospect (que pressupõem interesse já sinalizado)
+type IndicadoLojaScriptKey = 'parabenizacao' | 'reforco' | 'convite' | 'condicao';
+
+const INDICADO_LOJA_SCRIPTS: Record<IndicadoLojaScriptKey, ScriptDef> = {
+  parabenizacao: {
+    label: 'Parabenizar + perguntar próxima compra',
+    icon: Gift,
+    build: (nome) => `Oi ${firstName(nome)}! Aqui é o Felipe, das Lojas CEM 🎉 Parabéns por quitar seu carnê! Fico muito feliz que você confiou na gente. Aproveitando, me conta: qual vai ser o próximo produto pra sua casa? Assim já separo as melhores condições pra você!`,
+  },
+  reforco: {
+    label: 'Reforçar (sem resposta)',
+    icon: MessageCircle,
+    build: (nome) => `Oi ${firstName(nome)}, tudo bem? Aqui é o Felipe, das Lojas CEM. Fiquei pensando em você depois que quitou o carnê — já tem em mente algo novo pra casa? Geladeira, TV, sofá, guarda-roupa... me conta que eu já vejo a melhor condição!`,
+  },
+  convite: {
+    label: 'Convite pra loja',
+    icon: MapPin,
+    build: (nome) => `Oi ${firstName(nome)}! Já que seu carnê tá quitadinho, seu crédito na loja já libera de novo 🎉 Que tal passar aqui essa semana pra ver as novidades de pertinho? Qual dia fica melhor pra você?`,
+  },
+  condicao: {
+    label: 'Condição especial (bom pagador)',
+    icon: BadgePercent,
+    build: (nome) => `${firstName(nome)}, boa notícia! Como você é um ótimo pagador, consegui liberar uma condição especial pra sua próxima compra — entrada facilitada e parcelas que cabem certinho no seu bolso. Me conta o que você tá precisando que eu já te mando os detalhes!`,
+  },
+};
+
 function waLinkWithText(telefone: string, text: string) {
   const digits = onlyDigits(telefone);
   const phone = digits.length > 0 && digits.length <= 11 ? `55${digits}` : digits;
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+}
+
+// disparo em massa — junta os 3 grupos de scripts numa lista só, com chave
+// prefixada (grupo:chave) pra alimentar um único <select> no modal de disparo
+type ScriptOption = { key: string; label: string; group: string; def: ScriptDef };
+
+const DISPARO_SCRIPT_OPTIONS: ScriptOption[] = [
+  ...Object.entries(SCRIPTS).map(([key, def]) => ({ key: `cliente:${key}`, label: def.label, group: 'Cliente', def })),
+  ...Object.entries(PROSPECT_SCRIPTS).map(([key, def]) => ({ key: `prospect:${key}`, label: def.label, group: 'Prospect', def })),
+  ...Object.entries(INDICADO_LOJA_SCRIPTS).map(([key, def]) => ({ key: `indicado:${key}`, label: def.label, group: 'Indicado pela loja', def })),
+];
+
+const DISPARO_SCRIPT_BY_KEY: Record<string, ScriptDef> = Object.fromEntries(
+  DISPARO_SCRIPT_OPTIONS.map(o => [o.key, o.def])
+);
+
+/** script padrão pra um cliente quando o disparo em massa está no modo "Automático" */
+function scriptAutoPara(c: Cliente): ScriptDef {
+  if (c.origem === 'Indicado pela loja') return INDICADO_LOJA_SCRIPTS.parabenizacao;
+  if (c.status === 'PROSPECT') return PROSPECT_SCRIPTS.abordagem;
+  return SCRIPTS.posvenda;
 }
 
 /* ------------------------------- tipos derivados ------------------------------- */
@@ -322,11 +374,14 @@ function WaMenu({ c, onClose, anchorRect }: { c: Cliente; onClose: () => void; a
   };
 
   const isProspect = c.status === 'PROSPECT';
-  const scripts: ScriptDef[] = isProspect ? Object.values(PROSPECT_SCRIPTS) : Object.values(SCRIPTS);
+  const isIndicadoLoja = c.origem === 'Indicado pela loja';
+  const scripts: ScriptDef[] = isIndicadoLoja
+    ? Object.values(INDICADO_LOJA_SCRIPTS)
+    : isProspect ? Object.values(PROSPECT_SCRIPTS) : Object.values(SCRIPTS);
 
   return createPortal(
     <div className="wa-menu" style={style} onClick={(e) => e.stopPropagation()}>
-      <div className="wa-menu-title">{isProspect ? 'Trazer pra loja' : 'Escolha o script'}</div>
+      <div className="wa-menu-title">{isIndicadoLoja ? 'Parabenizar e oferecer' : isProspect ? 'Trazer pra loja' : 'Escolha o script'}</div>
       {scripts.map((s) => {
         const Icon = s.icon;
         return (
@@ -451,7 +506,10 @@ function KanbanCard({
       onPointerUp={onPointerUp}
       onPointerCancel={() => setDrag(null)}
     >
-      <div className="kanban-card-nome">{c.nome}{c.isVip && <Star size={11} className="vip-star" fill="#B8862B" />}</div>
+      <div className="kanban-card-top">
+        <div className="kanban-card-nome">{c.nome}{c.isVip && <Star size={11} className="vip-star" fill="#B8862B" />}</div>
+        <span className="kanban-card-status" style={{ color: s.color }}>{s.label}</span>
+      </div>
       <div className="kanban-card-produto">{c.produto || (isProspect ? 'Interesse não especificado' : 'Produto não informado')}</div>
       {!isProspect && !!c.valor_total && <div className="kanban-card-valor mono">{formatBRL(c.valor_total)}</div>}
     </div>
@@ -592,9 +650,9 @@ function ClienteCard({
       <div className="card-actions" onClick={e => e.stopPropagation()}>
         {c.telefone && (
           <>
-            <a className="icon-btn" href={`tel:${onlyDigits(c.telefone)}`} title="Ligar"><Phone size={16} /></a>
+            <a className="icon-btn" href={`tel:${onlyDigits(c.telefone)}`} title="Ligar" aria-label="Ligar pro cliente"><Phone size={16} /></a>
             <div style={{ position: 'relative' }}>
-              <button ref={waBtnRef} className="icon-btn wa" title="WhatsApp" onClick={() => setWaOpen(o => !o)}><MessageCircle size={16} /></button>
+              <button ref={waBtnRef} className="icon-btn wa" title="WhatsApp" aria-label="Abrir menu do WhatsApp" onClick={() => setWaOpen(o => !o)}><MessageCircle size={16} /></button>
               {waOpen && waBtnRef.current && (
                 <WaMenu c={c} onClose={() => setWaOpen(false)} anchorRect={waBtnRef.current.getBoundingClientRect()} />
               )}
@@ -603,8 +661,10 @@ function ClienteCard({
         )}
         <span className="tel-display">{c.telefone || 'sem telefone'}</span>
         <div className="spacer" />
-        <button className="icon-btn" onClick={() => onEdit(c)} title="Editar"><Pencil size={16} /></button>
-        <button className="icon-btn danger" onClick={() => onDelete(c.id)} title="Excluir"><Trash2 size={16} /></button>
+        <button className="icon-btn" onClick={() => onEdit(c)} title="Editar" aria-label="Editar cliente"><Pencil size={16} /></button>
+        <button className="icon-btn icon-btn-texto danger" onClick={() => onDelete(c.id)} title="Excluir" aria-label={`Excluir ${c.nome}`}>
+          <Trash2 size={16} /> <span className="icon-btn-label">Excluir</span>
+        </button>
       </div>
     </div>
   );
@@ -628,11 +688,18 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
   const [originalStatus, setOriginalStatus] = useState<StatusKey | null>(null);
   const [produtoDraft, setProdutoDraft] = useState('');
   const [produtoSuggestOpen, setProdutoSuggestOpen] = useState(false);
+  const [origemNovaMode, setOrigemNovaMode] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmExcluir, setConfirmExcluir] = useState<{ tipo: 'historico' | 'oferta' | 'interacao'; chave: string; label: string } | null>(null);
+  const [excluindoConfirmado, setExcluindoConfirmado] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [toastHistory, setToastHistory] = useState<{ msg: string; hora: string }[]>([]);
+  const [avisosOpen, setAvisosOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
   const [metaMensal, setMetaMensal] = useState<number | null>(null);
   const [editingMeta, setEditingMeta] = useState(false);
   const [metaInput, setMetaInput] = useState('');
+  const [metaDetalhesOpen, setMetaDetalhesOpen] = useState(false);
   const [acaoDoDiaOpen, setAcaoDoDiaOpen] = useState(true);
   const [oportunidadesExcluidas, setOportunidadesExcluidas] = useState<Set<string>>(new Set());
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
@@ -655,6 +722,12 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
   const [diaSelecionado, setDiaSelecionado] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [disparoOpen, setDisparoOpen] = useState(false);
+  const [disparoClientes, setDisparoClientes] = useState<Cliente[]>([]);
+  const [disparoIndex, setDisparoIndex] = useState(0);
+  const [disparoScriptKey, setDisparoScriptKey] = useState('auto');
+  const [disparoMsg, setDisparoMsg] = useState('');
+  const [disparoEnviados, setDisparoEnviados] = useState<Set<string>>(new Set());
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [viewMode, setViewMode] = useState<'lista' | 'kanban'>('lista');
   const [jarbasOpen, setJarbasOpen] = useState(false);
@@ -775,6 +848,42 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     setSelectionMode(false);
     loadClients({ silent: true });
   }
+
+  function abrirDisparoMassa() {
+    const alvo = filtered.filter(c => selectedIds.has(c.id));
+    if (alvo.length === 0) { showToast('Selecione pelo menos um cliente'); return; }
+    setDisparoClientes(alvo);
+    setDisparoIndex(0);
+    setDisparoScriptKey('auto');
+    setDisparoEnviados(new Set());
+    setDisparoOpen(true);
+  }
+
+  function fecharDisparoMassa() {
+    setDisparoOpen(false);
+    if (disparoEnviados.size > 0) {
+      loadClients({ silent: true });
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+    }
+  }
+
+  async function handleDisparoEnviar() {
+    const c = disparoClientes[disparoIndex];
+    if (!c) return;
+    window.open(waLinkWithText(c.telefone, disparoMsg), '_blank', 'noopener,noreferrer');
+    setDisparoEnviados(prev => new Set(prev).add(c.id));
+    await supabase.from('clientes').update({ ultimo_contato: todayIso() }).eq('id', c.id);
+    setDisparoIndex(i => i + 1);
+  }
+
+  useEffect(() => {
+    if (!disparoOpen) return;
+    const c = disparoClientes[disparoIndex];
+    if (!c) return;
+    const script = disparoScriptKey === 'auto' ? scriptAutoPara(c) : (DISPARO_SCRIPT_BY_KEY[disparoScriptKey] || scriptAutoPara(c));
+    setDisparoMsg(script.build(c.nome, c.produto));
+  }, [disparoOpen, disparoIndex, disparoScriptKey, disparoClientes]);
 
   async function handleAtivarNotificacoes() {
     try {
@@ -1079,7 +1188,26 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     setLembretesDevidos(prev => prev.filter(l => l.id !== id));
   }
 
-  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 2400); }
+  useEffect(() => {
+    if (!localStorage.getItem('cem-tour-visto')) setTourOpen(true);
+  }, []);
+  function fecharTour() {
+    localStorage.setItem('cem-tour-visto', '1');
+    setTourOpen(false);
+  }
+
+  useEffect(() => {
+    if (!avisosOpen) return;
+    function fechar() { setAvisosOpen(false); }
+    document.addEventListener('click', fechar);
+    return () => document.removeEventListener('click', fechar);
+  }, [avisosOpen]);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setToastHistory(prev => [{ msg, hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) }, ...prev].slice(0, 5));
+    setTimeout(() => setToast(null), 2400);
+  }
 
   async function loadInteracoes(clienteId: string) {
     const { data } = await supabase
@@ -1094,16 +1222,16 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
   function openAdd(status: StatusKey = 'ATIVO') {
     setForm({ ...emptyForm, id: '', status, data_compra: status === 'PROSPECT' ? null : emptyForm.data_compra });
     setOriginalStatus(null);
-    setInteracoes([]); setNovaNota(''); setProdutoDraft(''); setFormOpen(true);
+    setInteracoes([]); setNovaNota(''); setProdutoDraft(''); setOrigemNovaMode(false); setFormOpen(true);
   }
   function openEdit(c: Cliente) {
     setForm(c); setOriginalStatus(c.status);
-    setNovaNota(''); setProdutoDraft(''); loadInteracoes(c.id); setFormOpen(true);
+    setNovaNota(''); setProdutoDraft(''); setOrigemNovaMode(false); loadInteracoes(c.id); setFormOpen(true);
   }
   function openConverter(c: Cliente) {
     setForm({ ...c, status: 'ATIVO', data_compra: todayIso() });
     setOriginalStatus(c.status);
-    setNovaNota(''); setProdutoDraft(''); loadInteracoes(c.id); setFormOpen(true);
+    setNovaNota(''); setProdutoDraft(''); setOrigemNovaMode(false); loadInteracoes(c.id); setFormOpen(true);
   }
 
   async function handleAddInteracao() {
@@ -1124,6 +1252,17 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     const { error } = await supabase.from('interacoes').delete().eq('id', id);
     if (error) { showToast('Não consegui excluir'); return; }
     setInteracoes(prev => prev.filter(i => i.id !== id));
+  }
+
+  async function confirmarExclusaoGenerica() {
+    if (!confirmExcluir) return;
+    setExcluindoConfirmado(true);
+    const { tipo, chave } = confirmExcluir;
+    if (tipo === 'historico') await handleExcluirHistoricoMensal(chave);
+    else if (tipo === 'oferta') await handleDeleteOferta(chave);
+    else if (tipo === 'interacao') await handleDeleteInteracao(chave);
+    setExcluindoConfirmado(false);
+    setConfirmExcluir(null);
   }
 
   function handleExportarDadosCliente() {
@@ -1198,6 +1337,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     if (!cliente.indicado_por && prospect.indicado_por) backfill.indicado_por = prospect.indicado_por;
     if (!cliente.observacoes && prospect.observacoes) backfill.observacoes = prospect.observacoes;
     if (!cliente.data_nascimento && prospect.data_nascimento) backfill.data_nascimento = prospect.data_nascimento;
+    if (!cliente.origem && prospect.origem) backfill.origem = prospect.origem;
     // sem isso o cliente nunca contaria como "convertido" nas métricas de funil/Jarbas,
     // mesmo depois de remover o prospect duplicado
     if (!cliente.data_conversao) backfill.data_conversao = cliente.data_compra || todayIso();
@@ -1814,6 +1954,16 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     };
   }
 
+  // lista de origens já usadas — vira um seletor no formulário em vez de texto livre,
+  // porque o filtro "Indicados pela loja" compara o texto exato: um valor digitado
+  // diferente (acento, maiúscula) fazia o cliente sumir do filtro sem nenhum aviso
+  const origensExistentes = useMemo(
+    () => Array.from(new Set(clients.map(c => c.origem).filter((o): o is string => !!o))).sort((a, b) => a.localeCompare(b)),
+    [clients]
+  );
+  const origemNaoListada = !!form.origem && !origensExistentes.includes(form.origem);
+  const mostrarOrigemComoTexto = origemNovaMode || origemNaoListada;
+
   const previewTermino = form.data_compra && form.numero_parcelas
     ? addMonths(form.data_compra, Number(form.numero_parcelas)).toLocaleDateString('pt-BR')
     : null;
@@ -1857,6 +2007,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
             </div>
             <div className="header-actions">
               <button className="backup-btn jarbas-btn" onClick={() => setJarbasOpen(true)}><Bot size={13} /> Jarbas</button>
+              <button className="backup-btn" onClick={() => setTourOpen(true)}><HelpCircle size={13} /> Como usar</button>
               <button className="backup-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}>
                 {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
               </button>
@@ -1866,7 +2017,27 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                 </button>
               )}
               <button className="backup-btn" onClick={() => setRelatorioOpen(true)}><ClipboardList size={13} /> Relatório</button>
-              <button className="backup-btn" onClick={exportCsv}><Download size={13} /> CSV</button>
+              <button className="backup-btn" onClick={exportCsv}><Download size={13} /> Exportar planilha</button>
+              <div className="avisos-wrap" onClick={e => e.stopPropagation()}>
+                <button className="backup-btn" onClick={() => setAvisosOpen(o => !o)} title="Últimos avisos do sistema">
+                  <Clock size={13} /> Avisos
+                </button>
+                {avisosOpen && (
+                  <div className="avisos-pop">
+                    <div className="avisos-pop-title">Últimos avisos</div>
+                    {toastHistory.length === 0 ? (
+                      <div className="avisos-pop-vazio">Nada ainda nessa sessão.</div>
+                    ) : (
+                      toastHistory.map((t, i) => (
+                        <div key={i} className="avisos-pop-item">
+                          <span className="avisos-pop-hora mono">{t.hora}</span>
+                          <span>{t.msg}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
               <button className="logout-btn" onClick={handleLogout}><LogOut size={13} /> Sair</button>
             </div>
           </div>
@@ -1920,6 +2091,12 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                 </div>
                 <div className="meta-numbers mono">{formatBRL(vendasMesAnim)} de {formatBRL(metaMensal)}</div>
 
+                <button type="button" className="meta-detalhes-toggle" onClick={() => setMetaDetalhesOpen(o => !o)}>
+                  {metaDetalhesOpen ? 'Ocultar detalhes da meta' : 'Ver detalhes da meta'}
+                  <ChevronDown size={14} style={{ transform: metaDetalhesOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease' }} />
+                </button>
+
+                {metaDetalhesOpen && <>
                 {metaBatidaEsteMes && (
                   <div className="meta-dias-batida">
                     🏆 Bateu em {metaBatidaEsteMes.dia_meta_batida} dia{metaBatidaEsteMes.dia_meta_batida > 1 ? 's' : ''} esse mês
@@ -1955,7 +2132,10 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                 )}
 
                 <div className="projecao-box">
-                  <div className="projecao-label"><Rocket size={13} /> Projeção pro fim do mês, no seu ritmo atual</div>
+                  <div className="projecao-label">
+                    <Rocket size={13} /> Projeção pro fim do mês, no seu ritmo atual
+                    <HelpTip variant="on-dark" label="Projeção" text="Pega o quanto você já vendeu esse mês, divide pelos dias já passados e multiplica pelo total de dias do mês — ou seja, é uma estimativa de onde você vai terminar se mantiver o ritmo de vendas de agora." />
+                  </div>
                   <div className="projecao-track">
                     <div
                       className={`projecao-fill${metaCalc.projecaoPct >= 100 ? ' projecao-fill-over' : ''}`}
@@ -1975,7 +2155,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                 <div className="meta-mini-stats">
                   <div className="meta-mini">
                     <CalendarDays size={14} className="meta-mini-icon" />
-                    <div className="meta-mini-text"><div className="meta-mini-num mono">{Math.round(diasRestantesAnim)}</div><div className="meta-mini-label">dias úteis restantes</div></div>
+                    <div className="meta-mini-text"><div className="meta-mini-num mono">{Math.round(diasRestantesAnim)}</div><div className="meta-mini-label">dias úteis restantes <HelpTip variant="on-dark" label="Dias úteis restantes" text="Conta só os dias que faltam até o fim do mês descontando sábados e domingos — os dias em que você efetivamente trabalha na loja." /></div></div>
                   </div>
                   <div className="meta-mini">
                     <Wallet size={14} className="meta-mini-icon" />
@@ -1985,14 +2165,17 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                     <TrendingUp size={14} className="meta-mini-icon" />
                     <div className="meta-mini-text"><div className="meta-mini-num mono">{metaCalc.valorRestante === 0 ? 'R$ 0' : formatBRL(metaDiariaAnim)}</div><div className="meta-mini-label">vender por dia</div></div>
                   </div>
-                  <div className="meta-mini" title="Estimativa aproximada: móveis 2,5%, TV 0,5%, demais produtos numa taxa média aproximada">
+                  <div className="meta-mini">
                     <Coins size={14} className="meta-mini-icon" />
-                    <div className="meta-mini-text"><div className="meta-mini-num mono">{formatBRL(comissaoMesAnim)}</div><div className="meta-mini-label">comissão estimada</div></div>
+                    <div className="meta-mini-text"><div className="meta-mini-num mono">{formatBRL(comissaoMesAnim)}</div><div className="meta-mini-label">comissão estimada <HelpTip variant="on-dark" label="Comissão estimada" text="Estimativa aproximada: móveis rendem 2,5% de comissão, TV 0,5%, e os demais produtos usam uma taxa média — pode variar um pouco do valor real conforme a categoria exata de cada venda." /></div></div>
                   </div>
                 </div>
 
                 <div className="piso-box">
-                  <div className="piso-label">Comissão vs. piso garantido ({formatBRL(SALARIO_MINIMO_GARANTIDO)})</div>
+                  <div className="piso-label">
+                    Comissão vs. piso garantido ({formatBRL(SALARIO_MINIMO_GARANTIDO)})
+                    <HelpTip variant="on-dark" label="Piso garantido" text="É o valor mínimo que a loja garante de comissão no mês, mesmo que suas vendas gerem menos que isso — essa barra mostra o quanto da sua comissão estimada já cobre esse piso." />
+                  </div>
                   <div className="piso-track">
                     <div className="piso-fill" style={{ width: `${Math.min(100, (comissaoMes / SALARIO_MINIMO_GARANTIDO) * 100)}%` }} />
                   </div>
@@ -2049,6 +2232,11 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                   <div className="oportunidades-box">
                     <div className="oportunidades-title">
                       Quem pode ajudar a bater a meta {avgTicket && <span className="oportunidades-soma">— selecionados: {formatBRL(somaOportunidades)}</span>}
+                      <HelpTip
+                        variant="on-dark"
+                        label="Quem pode ajudar a bater a meta"
+                        text="Lista clientes com carnê acabando (crédito libera de novo em breve), fazendo aniversário de compra (~1 ano, hora do upgrade) ou VIP com contato recente — os que têm mais chance de comprar de novo agora."
+                      />
                     </div>
                     <div className="oportunidades-list">
                       {oportunidadesMeta.map(o => {
@@ -2069,6 +2257,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                     </div>
                   </div>
                 )}
+                </>}
               </>
             ) : (
               <p className="meta-empty-msg">Define uma meta de vendas do mês pra acompanhar seu progresso aqui.</p>
@@ -2082,6 +2271,42 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
             <div className="stat-card gold"><div className="stat-num mono">{Math.round(statVipsAnim)}</div><div className="stat-label"><Star size={12} /> VIPs</div></div>
             <div className="stat-card danger"><div className="stat-num mono">{Math.round(statIncompletosAnim)}</div><div className="stat-label"><PhoneOff size={12} /> Incompletos</div></div>
           </div>
+
+          {acaoDoDia.length > 0 && (
+            <div className="acao-dia-section">
+              <button className="acao-dia-header" onClick={() => setAcaoDoDiaOpen(o => !o)}>
+                <span><Zap size={15} color="var(--gold)" /> Ação do Dia — {acaoDoDia.length} cliente{acaoDoDia.length > 1 ? 's' : ''} precisam de você</span>
+                <ChevronDown size={16} style={{ transform: acaoDoDiaOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+              </button>
+              {acaoDoDiaOpen && (
+                <div className="acao-dia-list">
+                  {acaoDoDia.map(({ cliente, motivo, icon: Icon, cor }) => (
+                    <div key={cliente.id} className="acao-dia-item">
+                      <Icon size={15} color={cor} />
+                      <div className="acao-dia-texto">
+                        <strong>{cliente.nome}</strong> — {motivo}
+                      </div>
+                      <a
+                        className="mini-btn wa-mini"
+                        href={waLinkWithText(
+                          cliente.telefone,
+                          cliente.origem === 'Indicado pela loja'
+                            ? INDICADO_LOJA_SCRIPTS.parabenizacao.build(cliente.nome, cliente.produto)
+                            : cliente.status === 'PROSPECT'
+                            ? PROSPECT_SCRIPTS.abordagem.build(cliente.nome, cliente.produto)
+                            : SCRIPTS.posvenda.build(cliente.nome, cliente.produto)
+                        )}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <MessageCircle size={12} /> Chamar
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {lembretesDevidos.length > 0 && (
             <div className="tendencia-card">
@@ -2220,7 +2445,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                             <button type="button" className="close-btn" onClick={e => { e.stopPropagation(); handleStartEditOferta(oferta); }}>
                               <Pencil size={14} />
                             </button>
-                            <button type="button" className="close-btn" onClick={e => { e.stopPropagation(); handleDeleteOferta(oferta.id); }}>
+                            <button type="button" className="close-btn" onClick={e => { e.stopPropagation(); setConfirmExcluir({ tipo: 'oferta', chave: oferta.id, label: oferta.produto }); }}>
                               <Trash2 size={14} />
                             </button>
                           </div>
@@ -2352,7 +2577,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                             <Pencil size={12} /> {h.manual ? 'Editar' : 'Ajustar'}
                           </button>
                           {h.manual && (
-                            <button type="button" className="duplicado-btn" onClick={() => handleExcluirHistoricoMensal(h.mes)}>
+                            <button type="button" className="duplicado-btn" onClick={() => setConfirmExcluir({ tipo: 'historico', chave: h.mes, label: labelCap })}>
                               <Trash2 size={12} />
                             </button>
                           )}
@@ -2366,7 +2591,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
           </div>
 
           {duplicadosVisiveis.length > 0 && (
-            <div className="tendencia-card">
+            <div className="tendencia-card tendencia-card-alerta">
               <button type="button" className="tendencia-header tendencia-header-toggle" onClick={() => setDuplicadosOpen(o => !o)}>
                 <div className="tendencia-title"><Users size={15} /> Possíveis duplicados ({duplicadosVisiveis.length})</div>
                 <ChevronDown size={16} style={{ transform: duplicadosOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease' }} />
@@ -2437,10 +2662,16 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
 
           {conversao.totalHistorico > 0 && (
             <div className="tendencia-card">
-              <button type="button" className="tendencia-header tendencia-header-toggle" onClick={() => setFunilOpen(o => !o)}>
-                <div className="tendencia-title"><Funnel size={15} /> Funil de conversão</div>
-                <ChevronDown size={16} style={{ transform: funilOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease' }} />
-              </button>
+              <div className="tendencia-header">
+                <button type="button" className="tendencia-header-toggle" style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} onClick={() => setFunilOpen(o => !o)}>
+                  <div className="tendencia-title"><Funnel size={15} /> Funil de conversão</div>
+                  <ChevronDown size={16} style={{ transform: funilOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease' }} />
+                </button>
+                <HelpTip
+                  label="Funil de conversão"
+                  text="Mostra quantos prospects ainda estão em aberto e quantos você já converteu em venda, com a taxa histórica de conversão e o tempo médio até fechar negócio."
+                />
+              </div>
               {funilOpen && (
                 <>
                   <div className="funil-row">
@@ -2501,40 +2732,6 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
             </div>
           )}
 
-          {acaoDoDia.length > 0 && (
-            <div className="acao-dia-section">
-              <button className="acao-dia-header" onClick={() => setAcaoDoDiaOpen(o => !o)}>
-                <span><Zap size={15} color="var(--gold)" /> Ação do Dia — {acaoDoDia.length} cliente{acaoDoDia.length > 1 ? 's' : ''} precisam de você</span>
-                <ChevronDown size={16} style={{ transform: acaoDoDiaOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
-              </button>
-              {acaoDoDiaOpen && (
-                <div className="acao-dia-list">
-                  {acaoDoDia.map(({ cliente, motivo, icon: Icon, cor }) => (
-                    <div key={cliente.id} className="acao-dia-item">
-                      <Icon size={15} color={cor} />
-                      <div className="acao-dia-texto">
-                        <strong>{cliente.nome}</strong> — {motivo}
-                      </div>
-                      <a
-                        className="mini-btn wa-mini"
-                        href={waLinkWithText(
-                          cliente.telefone,
-                          cliente.status === 'PROSPECT'
-                            ? PROSPECT_SCRIPTS.abordagem.build(cliente.nome, cliente.produto)
-                            : SCRIPTS.posvenda.build(cliente.nome, cliente.produto)
-                        )}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <MessageCircle size={12} /> Chamar
-                      </a>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
           {cadastrosIncompletos.length > 0 && (
             <div className="acao-dia-section incompletos-section">
               <button className="acao-dia-header" onClick={() => setIncompletosOpen(o => !o)}>
@@ -2569,12 +2766,16 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
               <option value="recente">Compra mais recente</option>
               <option value="nome">Nome (A-Z)</option>
             </select>
+            <HelpTip
+              label="Selos do cliente"
+              text="🔥 Quente = contato nos últimos 15 dias · 🙂 Morno = até 45 dias · ❄️ Frio = mais de 45 dias sem contato. A estrela dourada marca os clientes VIP — os 20% com maior valor total de compra."
+            />
             <button
               type="button"
               className="backup-btn"
               onClick={() => { setViewMode(v => v === 'lista' ? 'kanban' : 'lista'); if (selectionMode) toggleSelectionMode(); }}
             >
-              {viewMode === 'lista' ? <><KanbanSquare size={13} /> Kanban</> : <><List size={13} /> Lista</>}
+              {viewMode === 'lista' ? <><KanbanSquare size={13} /> Quadro</> : <><List size={13} /> Lista</>}
             </button>
             {viewMode === 'lista' && (
               <button type="button" className={`backup-btn ${selectionMode ? 'active' : ''}`} onClick={toggleSelectionMode}>
@@ -2622,8 +2823,12 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
             </div>
           ) : filtered.length === 0 ? (
             <div className="empty-state">
-              <h3>{clients.length === 0 ? 'Sua carteira está vazia' : 'Nada por aqui'}</h3>
-              <p>{clients.length === 0 ? 'Comece cadastrando o primeiro cliente que você atendeu.' : 'Tenta ajustar a busca ou o filtro.'}</p>
+              <h3>{clients.length === 0 ? 'Sua carteira está vazia' : 'Nenhum cliente com esse filtro'}</h3>
+              <p>
+                {clients.length === 0
+                  ? 'Comece cadastrando o primeiro cliente que você atendeu.'
+                  : 'Ninguém bateu com a combinação de busca e filtros ativos agora — tenta tirar algum filtro ou ajustar o termo buscado.'}
+              </p>
             </div>
           ) : (
             <div className="list">
@@ -2650,6 +2855,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                 <span className="selection-bar-count">{selectedIds.size} selecionado{selectedIds.size > 1 ? 's' : ''}</span>
                 <div className="selection-bar-actions">
                   <button type="button" className="btn-cancel" onClick={toggleSelectionMode}>Cancelar</button>
+                  <button type="button" className="btn-disparo" onClick={abrirDisparoMassa}><Send size={13} /> Disparo em massa</button>
                   <button type="button" className="btn-confirm" onClick={handleMarcarContatoLote}><Check size={13} /> Marcar contato feito</button>
                 </div>
               </div>
@@ -2676,129 +2882,168 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                     <button type="button" className="close-btn" onClick={() => setFormOpen(false)}><X size={20} /></button>
                   </div>
                 </div>
-                <div className="form-grid">
-                  <div className="form-field full">
-                    <label>Nome *</label>
-                    <input {...field('nome')} placeholder="Nome do cliente" required />
-                  </div>
-                  <div className="form-field">
-                    <label>Telefone / WhatsApp</label>
-                    <input {...field('telefone')} placeholder="(17) 99999-9999" />
-                  </div>
-                  <div className="form-field full">
-                    <label>{isProspectForm ? 'Produtos de interesse' : 'Produtos'}</label>
-                    <div className="tags-input-wrap">
-                      <div className="tags-input">
-                        {produtoItems.map(item => (
-                          <span key={item} className="tag-chip">
-                            {item}
-                            <button type="button" onClick={() => removeProdutoItem(item)} aria-label={`Remover ${item}`}><X size={11} /></button>
-                          </span>
-                        ))}
-                        <input
-                          value={produtoDraft}
-                          onChange={e => { setProdutoDraft(e.target.value); setProdutoSuggestOpen(true); }}
-                          onFocus={() => setProdutoSuggestOpen(true)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addProdutoItem(); }
-                            else if (e.key === 'Backspace' && !produtoDraft && produtoItems.length) removeProdutoItem(produtoItems[produtoItems.length - 1]);
-                            else if (e.key === 'Escape') setProdutoSuggestOpen(false);
-                          }}
-                          onBlur={() => { setProdutoSuggestOpen(false); addProdutoItem(); }}
-                          placeholder={produtoItems.length ? 'Adicionar outro...' : 'Painel TV, sofá, geladeira...'}
-                          autoComplete="off"
-                        />
-                        <button type="button" className="tag-add-btn" onClick={() => addProdutoItem()} title="Adicionar produto"><Plus size={14} /></button>
+                <div className="form-sections">
+                  <div className="form-section">
+                    <div className="form-section-title">Contato</div>
+                    <div className="form-grid">
+                      <div className="form-field full">
+                        <label>Nome *</label>
+                        <input {...field('nome')} placeholder="Nome do cliente" required />
                       </div>
-                      {produtoSuggestOpen && produtoSugestoesFiltradas.length > 0 && (
-                        <div className="produto-suggest-list">
-                          {produtoSugestoesFiltradas.map(p => (
-                            <button
-                              key={p}
-                              type="button"
-                              className="produto-suggest-item"
-                              onMouseDown={e => e.preventDefault()}
-                              onClick={() => { addProdutoItem(p); setProdutoSuggestOpen(false); }}
-                            >
-                              {p}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="form-field">
-                    <label>Status</label>
-                    <select {...field('status')}>
-                      {STATUS_ORDER.map(k => <option key={k} value={k}>{STATUS[k].label}</option>)}
-                    </select>
-                  </div>
-                  {!isProspectForm && (
-                    <>
                       <div className="form-field">
-                        <label>Forma de pagamento</label>
-                        <select {...field('forma_pagamento')}>
-                          <option value="PARCELADO">Parcelado</option>
-                          <option value="A_VISTA">À vista</option>
+                        <label>Telefone / WhatsApp</label>
+                        <input {...field('telefone')} placeholder="(17) 99999-9999" />
+                      </div>
+                      <div className="form-field">
+                        <label>Data de nascimento</label>
+                        <input {...field('data_nascimento')} type="date" />
+                      </div>
+                      <div className="form-field">
+                        <label>Indicado por</label>
+                        <select {...field('indicado_por')}>
+                          <option value="">Ninguém / veio sozinho</option>
+                          {clients.filter(o => o.id !== form.id).map(o => (
+                            <option key={o.id} value={o.id}>{o.nome}</option>
+                          ))}
                         </select>
                       </div>
                       <div className="form-field">
-                        <label>Valor total</label>
-                        <input {...field('valor_total')} type="number" step="0.01" placeholder="0,00" />
+                        <label>Origem (opcional)</label>
+                        {mostrarOrigemComoTexto ? (
+                          <div className="origem-nova-row">
+                            <input {...field('origem')} placeholder="Ex: Indicado pela loja" autoFocus={origemNovaMode} />
+                            {origensExistentes.length > 0 && (
+                              <button type="button" className="origem-voltar-btn" onClick={() => setOrigemNovaMode(false)}>
+                                Escolher da lista
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <select
+                            value={form.origem || ''}
+                            onChange={e => {
+                              if (e.target.value === '__nova__') { setOrigemNovaMode(true); setForm({ ...form, origem: '' }); }
+                              else setForm({ ...form, origem: e.target.value || null });
+                            }}
+                          >
+                            <option value="">Nenhuma</option>
+                            {origensExistentes.map(o => <option key={o} value={o}>{o}</option>)}
+                            <option value="__nova__">+ Criar nova origem...</option>
+                          </select>
+                        )}
                       </div>
-                      {form.forma_pagamento !== 'A_VISTA' && (
+                    </div>
+                  </div>
+
+                  <div className="form-section">
+                    <div className="form-section-title">Compra</div>
+                    <div className="form-grid">
+                      <div className="form-field full">
+                        <label>{isProspectForm ? 'Produtos de interesse' : 'Produtos'}</label>
+                        <div className="tags-input-wrap">
+                          <div className="tags-input">
+                            {produtoItems.map(item => (
+                              <span key={item} className="tag-chip">
+                                {item}
+                                <button type="button" onClick={() => removeProdutoItem(item)} aria-label={`Remover ${item}`}><X size={11} /></button>
+                              </span>
+                            ))}
+                            <input
+                              value={produtoDraft}
+                              onChange={e => { setProdutoDraft(e.target.value); setProdutoSuggestOpen(true); }}
+                              onFocus={() => setProdutoSuggestOpen(true)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addProdutoItem(); }
+                                else if (e.key === 'Backspace' && !produtoDraft && produtoItems.length) removeProdutoItem(produtoItems[produtoItems.length - 1]);
+                                else if (e.key === 'Escape') setProdutoSuggestOpen(false);
+                              }}
+                              onBlur={() => { setProdutoSuggestOpen(false); addProdutoItem(); }}
+                              placeholder={produtoItems.length ? 'Adicionar outro...' : 'Painel TV, sofá, geladeira...'}
+                              autoComplete="off"
+                            />
+                            <button type="button" className="tag-add-btn" onClick={() => addProdutoItem()} title="Adicionar produto"><Plus size={14} /></button>
+                          </div>
+                          {produtoSuggestOpen && produtoSugestoesFiltradas.length > 0 && (
+                            <div className="produto-suggest-list">
+                              {produtoSugestoesFiltradas.map(p => (
+                                <button
+                                  key={p}
+                                  type="button"
+                                  className="produto-suggest-item"
+                                  onMouseDown={e => e.preventDefault()}
+                                  onClick={() => { addProdutoItem(p); setProdutoSuggestOpen(false); }}
+                                >
+                                  {p}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="form-field">
+                        <label>Status</label>
+                        <select {...field('status')}>
+                          {STATUS_ORDER.map(k => <option key={k} value={k}>{STATUS[k].label}</option>)}
+                        </select>
+                      </div>
+                      {!isProspectForm && (
                         <>
                           <div className="form-field">
-                            <label>Sinal (entrada)</label>
-                            <input {...field('valor_sinal')} type="number" step="0.01" placeholder="0,00" />
+                            <label>Forma de pagamento</label>
+                            <select {...field('forma_pagamento')}>
+                              <option value="PARCELADO">Parcelado</option>
+                              <option value="A_VISTA">À vista</option>
+                            </select>
                           </div>
                           <div className="form-field">
-                            <label>Valor da parcela</label>
-                            <input {...field('valor_parcela')} type="number" step="0.01" placeholder="0,00" />
+                            <label>Valor total</label>
+                            <input {...field('valor_total')} type="number" step="0.01" placeholder="0,00" />
+                            <span className="form-field-hint">Use ponto pros centavos: 1500.00</span>
                           </div>
+                          {form.forma_pagamento !== 'A_VISTA' && (
+                            <>
+                              <div className="form-field">
+                                <label>Sinal (entrada)</label>
+                                <input {...field('valor_sinal')} type="number" step="0.01" placeholder="0,00" />
+                              </div>
+                              <div className="form-field">
+                                <label>Valor da parcela</label>
+                                <input {...field('valor_parcela')} type="number" step="0.01" placeholder="0,00" />
+                              </div>
+                              <div className="form-field">
+                                <label>Número de parcelas</label>
+                                <input {...field('numero_parcelas')} type="number" min="1" placeholder="12" />
+                              </div>
+                              <div className="form-field">
+                                <label>Dia de vencimento</label>
+                                <input {...field('dia_vencimento')} type="number" min="1" max="31" placeholder="10" />
+                              </div>
+                            </>
+                          )}
                           <div className="form-field">
-                            <label>Número de parcelas</label>
-                            <input {...field('numero_parcelas')} type="number" min="1" placeholder="12" />
-                          </div>
-                          <div className="form-field">
-                            <label>Dia de vencimento</label>
-                            <input {...field('dia_vencimento')} type="number" min="1" max="31" placeholder="10" />
+                            <label>Data da compra</label>
+                            <input {...field('data_compra')} type="date" />
                           </div>
                         </>
                       )}
+                      {previewTermino && !isProspectForm && (
+                        <div className="termino-preview">Término previsto do carnê: {previewTermino}</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="form-section">
+                    <div className="form-section-title">Acompanhamento</div>
+                    <div className="form-grid">
                       <div className="form-field">
-                        <label>Data da compra</label>
-                        <input {...field('data_compra')} type="date" />
+                        <label>Próximo contato (opcional)</label>
+                        <input {...field('proximo_contato')} type="date" />
                       </div>
-                    </>
-                  )}
-                  <div className="form-field">
-                    <label>Data de nascimento</label>
-                    <input {...field('data_nascimento')} type="date" />
-                  </div>
-                  <div className="form-field">
-                    <label>Indicado por</label>
-                    <select {...field('indicado_por')}>
-                      <option value="">Ninguém / veio sozinho</option>
-                      {clients.filter(o => o.id !== form.id).map(o => (
-                        <option key={o.id} value={o.id}>{o.nome}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-field">
-                    <label>Origem (opcional)</label>
-                    <input {...field('origem')} placeholder="Ex: Indicado pela loja" />
-                  </div>
-                  {previewTermino && !isProspectForm && (
-                    <div className="termino-preview">Término previsto do carnê: {previewTermino}</div>
-                  )}
-                  <div className="form-field">
-                    <label>Próximo contato (opcional)</label>
-                    <input {...field('proximo_contato')} type="date" />
-                  </div>
-                  <div className="form-field full">
-                    <label>Observações</label>
-                    <textarea {...field('observacoes')} placeholder="Preferências, combinados, detalhes da negociação..." />
+                      <div className="form-field full">
+                        <label>Observações</label>
+                        <textarea {...field('observacoes')} placeholder="Preferências, combinados, detalhes da negociação..." />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -2823,7 +3068,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                           <div key={i.id} className="historico-item">
                             <div className="historico-item-top">
                               <span className="historico-data mono">{formatDateBR(i.data)}</span>
-                              <button type="button" className="historico-del" onClick={() => handleDeleteInteracao(i.id)}><Trash2 size={12} /></button>
+                              <button type="button" className="historico-del" onClick={() => setConfirmExcluir({ tipo: 'interacao', chave: i.id, label: formatDateBR(i.data) })}><Trash2 size={12} /></button>
                             </div>
                             <div className="historico-nota">{i.nota}</div>
                           </div>
@@ -2856,6 +3101,21 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
             </motion.div>
           )}
           </AnimatePresence>
+
+          <ConfirmModal
+            open={!!confirmExcluir}
+            title={
+              confirmExcluir?.tipo === 'historico' ? 'Excluir esse mês do histórico?'
+              : confirmExcluir?.tipo === 'oferta' ? 'Excluir essa oferta?'
+              : 'Excluir essa anotação?'
+            }
+            message={`"${confirmExcluir?.label}" — essa ação não pode ser desfeita.`}
+            confirmLabel="Excluir"
+            danger
+            loading={excluindoConfirmado}
+            onConfirm={confirmarExclusaoGenerica}
+            onCancel={() => setConfirmExcluir(null)}
+          />
 
           <AnimatePresence>
           {confirmMerge && (
@@ -3037,6 +3297,72 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
             </motion.div>
           )}
           </AnimatePresence>
+
+          <AnimatePresence>
+          {disparoOpen && (
+            <motion.div key="disparo-overlay" className="modal-overlay" onClick={fecharDisparoMassa} {...overlayMotion}>
+              <motion.div key="disparo-modal" className="modal disparo-modal" onClick={e => e.stopPropagation()} {...modalMotion}>
+                <div className="modal-header">
+                  <span className="modal-title"><Send size={18} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />Disparo em massa</span>
+                  <button type="button" className="close-btn" onClick={fecharDisparoMassa}><X size={20} /></button>
+                </div>
+
+                {disparoIndex >= disparoClientes.length ? (
+                  <div className="disparo-summary">
+                    <Check size={32} color="var(--gold)" />
+                    <p>
+                      <strong>{disparoEnviados.size}</strong> de {disparoClientes.length} mensagem{disparoClientes.length > 1 ? 's' : ''} enviada{disparoEnviados.size === 1 ? '' : 's'}.
+                    </p>
+                    <button type="button" className="btn primary" onClick={fecharDisparoMassa}>Concluir</button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="disparo-progress">
+                      <div className="disparo-progress-track">
+                        <div className="disparo-progress-fill" style={{ width: `${(disparoIndex / disparoClientes.length) * 100}%` }} />
+                      </div>
+                      <span className="disparo-progress-label">
+                        {disparoIndex + 1} de {disparoClientes.length} · {disparoEnviados.size} enviado{disparoEnviados.size === 1 ? '' : 's'}
+                      </span>
+                    </div>
+
+                    <div className="form-field full" style={{ marginBottom: 10 }}>
+                      <label>Script</label>
+                      <select value={disparoScriptKey} onChange={e => setDisparoScriptKey(e.target.value)}>
+                        <option value="auto">Automático (recomendado)</option>
+                        {['Cliente', 'Prospect', 'Indicado pela loja'].map(grupo => (
+                          <optgroup key={grupo} label={grupo}>
+                            {DISPARO_SCRIPT_OPTIONS.filter(o => o.group === grupo).map(o => (
+                              <option key={o.key} value={o.key}>{o.label}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="disparo-client">
+                      <strong>{disparoClientes[disparoIndex]?.nome}</strong>
+                      <span className="disparo-client-phone">{disparoClientes[disparoIndex]?.telefone}</span>
+                    </div>
+
+                    <div className="form-field full">
+                      <label>Mensagem</label>
+                      <textarea value={disparoMsg} onChange={e => setDisparoMsg(e.target.value)} rows={5} />
+                    </div>
+
+                    <div className="modal-actions">
+                      <button type="button" className="btn ghost" disabled={disparoIndex === 0} onClick={() => setDisparoIndex(i => Math.max(0, i - 1))}>Voltar</button>
+                      <button type="button" className="btn ghost" onClick={() => setDisparoIndex(i => i + 1)}>Pular</button>
+                      <button type="button" className="btn primary" onClick={handleDisparoEnviar}><Send size={14} /> Enviar</button>
+                    </div>
+                  </>
+                )}
+              </motion.div>
+            </motion.div>
+          )}
+          </AnimatePresence>
+
+          <OnboardingTour open={tourOpen} onClose={fecharTour} />
 
           {toast && <div className="toast">{toast}</div>}
         </>
