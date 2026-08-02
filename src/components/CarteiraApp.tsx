@@ -219,7 +219,7 @@ const emptyForm: Cliente = {
   valor_total: null, valor_sinal: null, valor_parcela: null, numero_parcelas: null,
   data_compra: localIso(new Date()),
   dia_vencimento: null, status: 'ATIVO', observacoes: '', proximo_contato: null,
-  data_nascimento: null, indicado_por: null, ultimo_contato: null, data_conversao: null,
+  data_nascimento: null, indicado_por: null, ultimo_contato: null, data_conversao: null, origem: null,
 };
 
 /* ---------------------------------- motion helpers ---------------------------------- */
@@ -509,6 +509,7 @@ function ClienteCard({
             <div className="card-meta-row">
               <Termometro t={c.temperatura} />
               {indicadorNome && <span className="ref-tag">indicado por {indicadorNome}</span>}
+              {c.origem && <span className="ref-tag ref-tag-gold">{c.origem}</span>}
               {c.indicacoesFeitas > 0 && <span className="ref-tag ref-tag-gold"><Handshake size={11} /> {c.indicacoesFeitas} indicação{c.indicacoesFeitas > 1 ? 'ões' : ''}</span>}
             </div>
           </div>
@@ -620,6 +621,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusKey | 'TODOS'>('TODOS');
+  const [origemLojaFiltro, setOrigemLojaFiltro] = useState(false);
   const [sortBy, setSortBy] = useState<'termino' | 'nome' | 'recente'>('termino');
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<Cliente>(emptyForm);
@@ -811,7 +813,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
       const nome = partes[0] || '';
       const telefone = partes[1] || '';
       const observacoes = partes.slice(2).filter(Boolean).join(' · ') || null;
-      return { nome, telefone, status: 'PROSPECT' as const, observacoes };
+      return { nome, telefone, status: 'PROSPECT' as const, observacoes, origem: 'Indicado pela loja' };
     }).filter(r => r.nome && r.telefone);
     if (registros.length === 0) { showToast('Nenhuma linha válida — usa nome;telefone;observação'); return; }
     setImportandoLoja(true);
@@ -1166,6 +1168,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
       proximo_contato: form.proximo_contato || null,
       data_nascimento: form.data_nascimento || null,
       indicado_por: form.indicado_por || null,
+      origem: form.origem || null,
       data_conversao: conversaoAgora ? todayIso() : (form.data_conversao ?? null),
     };
 
@@ -1765,6 +1768,9 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     } else if (statusFilter !== 'TODOS') {
       list = list.filter(c => c.status === statusFilter);
     }
+    if (origemLojaFiltro) {
+      list = list.filter(c => c.origem === 'Indicado pela loja');
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(c =>
@@ -1783,7 +1789,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
       if (sortBy === 'recente') return new Date(b.data_compra || 0).getTime() - new Date(a.data_compra || 0).getTime();
       return 0;
     });
-  }, [enriched, statusFilter, search, sortBy]);
+  }, [enriched, statusFilter, origemLojaFiltro, search, sortBy]);
 
   const kanbanColunas = useMemo(() => {
     const porStatus: Record<StatusKey, EnrichedCliente[]> = { PROSPECT: [], ATIVO: [], ATRASADO: [], NEGOCIANDO: [], QUITADO: [] };
@@ -2583,6 +2589,9 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
               {STATUS_ORDER.map(k => (
                 <button key={k} className={`chip ${statusFilter === k ? 'active' : ''}`} onClick={() => setStatusFilter(k)}>{STATUS[k].label}</button>
               ))}
+              <button className={`chip ${origemLojaFiltro ? 'active' : ''}`} onClick={() => setOrigemLojaFiltro(o => !o)}>
+                Indicados pela loja
+              </button>
               {selectionMode && (
                 <button className="chip" onClick={() => setSelectedIds(new Set(filtered.map(c => c.id)))}>
                   Selecionar todos ({filtered.length})
@@ -2775,6 +2784,10 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                         <option key={o.id} value={o.id}>{o.nome}</option>
                       ))}
                     </select>
+                  </div>
+                  <div className="form-field">
+                    <label>Origem (opcional)</label>
+                    <input {...field('origem')} placeholder="Ex: Indicado pela loja" />
                   </div>
                   {previewTermino && !isProspectForm && (
                     <div className="termino-preview">Término previsto do carnê: {previewTermino}</div>
