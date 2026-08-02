@@ -1924,6 +1924,20 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                   </div>
                 )}
 
+                {historicoMensal.filter(h => h.mes !== monthKey(todayIso()) && h.valor > 0).length > 0 && (
+                  <div className="meta-historico">
+                    <div className="meta-historico-title">Histórico Mensal — total de vendas</div>
+                    <div className="meta-historico-lista">
+                      {historicoMensal.filter(h => h.mes !== monthKey(todayIso()) && h.valor > 0).map(h => (
+                        <div key={h.mes} className="meta-historico-item">
+                          <span>{monthLabel(h.mes)}</span>
+                          <span className="mono">{formatBRL(h.valor)}{h.manual ? ' · ajustado' : ''}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="projecao-box">
                   <div className="projecao-label"><Rocket size={13} /> Projeção pro fim do mês, no seu ritmo atual</div>
                   <div className="projecao-track">
