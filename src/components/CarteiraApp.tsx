@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { gerarRespostaJarbas, type JarbasContexto } from '@/lib/jarbas';
-import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao, Lembrete, MetaHistorico, Oferta } from '@/types';
+import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao, Lembrete, MetaHistorico, Oferta, VendaHistoricoMensal } from '@/types';
 import {
   type CategoriaProduto, CATEGORIA_LABELS, CATEGORIA_TAXA, CATEGORIA_ORDEM, SALARIO_MINIMO_GARANTIDO,
   PRODUTOS_SUGERIDOS, normalizeText, splitProdutos, categoriaProduto, valorPorCategoria, comissaoVenda,
@@ -46,6 +46,13 @@ function formatDateBR(iso: string | null | undefined) {
   const [y, m, d] = iso.split('-');
   if (!y || !m || !d) return '—';
   return `${d}/${m}/${y}`;
+}
+/** "2026-08-01" vira meia-noite UTC se passar direto pro construtor de Date — em fuso
+ * negativo (Brasil) isso "escorrega" pro dia/mês anterior na hora de ler ano/mês/dia
+ * local. Sempre usar isso pra data-only (sem horário) em vez de `new Date(iso)`. */
+function parseDataLocal(iso: string): Date {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return new Date(y, m - 1, d);
 }
 const WEEKDAY_ABBR = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 function weekdayAbbrev(iso: string) {
@@ -84,7 +91,16 @@ function monthsElapsed(iso: string) {
 }
 function onlyDigits(s: string | null | undefined) { return (s || '').replace(/\D/g, ''); }
 function firstName(nome: string) { return (nome || '').trim().split(' ')[0] || ''; }
-function todayIso() { return new Date().toISOString().slice(0, 10); }
+/** Formata um Date pelos componentes LOCAIS (ano/mês/dia) — `toISOString()` converte pra
+ * UTC antes de formatar, o que troca de dia mais cedo que a meia-noite local sempre que o
+ * fuso é negativo (Brasil): depois das 21h já mostra o dia seguinte como "hoje". */
+function localIso(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dia}`;
+}
+function todayIso() { return localIso(new Date()); }
 
 /** dias até o próximo aniversário (0 = hoje), null se sem data */
 function daysUntilBirthday(iso: string | null): number | null {
@@ -191,7 +207,7 @@ type AcaoDoDia = {
 const emptyForm: Cliente = {
   id: '', nome: '', telefone: '', produto: '', forma_pagamento: 'PARCELADO',
   valor_total: null, valor_sinal: null, valor_parcela: null, numero_parcelas: null,
-  data_compra: new Date().toISOString().slice(0, 10),
+  data_compra: localIso(new Date()),
   dia_vencimento: null, status: 'ATIVO', observacoes: '', proximo_contato: null,
   data_nascimento: null, indicado_por: null, ultimo_contato: null, data_conversao: null,
 };
@@ -453,7 +469,7 @@ function ClienteCard({
     : null;
   const progresso = hasTermino ? Math.min(100, Math.round(((parcelasEstimadas as number) / Number(c.numero_parcelas)) * 100)) : 0;
   const terminandoEmBreve = c.status !== 'QUITADO' && c.diasParaTermino !== null && c.diasParaTermino <= 30;
-  const contatoPendente = c.proximo_contato ? daysUntil(new Date(c.proximo_contato)) <= 0 : false;
+  const contatoPendente = c.proximo_contato ? daysUntil(parseDataLocal(c.proximo_contato)) <= 0 : false;
   const [waOpen, setWaOpen] = useState(false);
   const waBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -641,6 +657,12 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
   const [listagemLojaOpen, setListagemLojaOpen] = useState(false);
   const [importLojaTexto, setImportLojaTexto] = useState('');
   const [importandoLoja, setImportandoLoja] = useState(false);
+  const [vendasHistoricoMensal, setVendasHistoricoMensal] = useState<VendaHistoricoMensal[]>([]);
+  const [historicoMensalOpen, setHistoricoMensalOpen] = useState(false);
+  const [editandoMesHistorico, setEditandoMesHistorico] = useState<string | null>(null);
+  const [mesHistoricoInput, setMesHistoricoInput] = useState('');
+  const [valorHistoricoInput, setValorHistoricoInput] = useState('');
+  const [salvandoHistoricoMensal, setSalvandoHistoricoMensal] = useState(false);
   const [novaOfertaProduto, setNovaOfertaProduto] = useState('');
   const [novaOfertaLink, setNovaOfertaLink] = useState('');
   const [novaOfertaObs, setNovaOfertaObs] = useState('');
@@ -789,6 +811,39 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     setImportLojaTexto('');
     showToast(`${registros.length} lead(s) importado(s) como prospect`);
     loadClients();
+  }
+
+  const loadVendasHistoricoMensal = useCallback(async () => {
+    const { data } = await supabase.from('vendas_historico_mensal').select('*').order('mes', { ascending: false });
+    if (data) setVendasHistoricoMensal(data as VendaHistoricoMensal[]);
+  }, [supabase]);
+  useEffect(() => { loadVendasHistoricoMensal(); }, [loadVendasHistoricoMensal]);
+
+  function handleStartEditHistoricoMensal(mes: string, valorAtual?: number) {
+    setEditandoMesHistorico(mes || 'novo');
+    setMesHistoricoInput(mes);
+    setValorHistoricoInput(valorAtual ? String(valorAtual) : '');
+  }
+
+  async function handleSalvarHistoricoMensal() {
+    if (!/^\d{4}-\d{2}$/.test(mesHistoricoInput)) { showToast('Mês inválido — usa o formato AAAA-MM'); return; }
+    const valor = parseFloat(valorHistoricoInput.replace(/\./g, '').replace(',', '.'));
+    if (!valor || valor <= 0) { showToast('Digita um valor válido'); return; }
+    setSalvandoHistoricoMensal(true);
+    const { error } = await supabase.from('vendas_historico_mensal').upsert(
+      { mes: mesHistoricoInput, valor_total: valor, observacoes: 'Ajustado manualmente' },
+      { onConflict: 'user_id,mes' }
+    );
+    setSalvandoHistoricoMensal(false);
+    if (error) { showToast('Não consegui salvar'); return; }
+    setEditandoMesHistorico(null);
+    loadVendasHistoricoMensal();
+  }
+
+  async function handleExcluirHistoricoMensal(mes: string) {
+    const { error } = await supabase.from('vendas_historico_mensal').delete().eq('mes', mes);
+    if (error) { showToast('Não consegui excluir'); return; }
+    setVendasHistoricoMensal(prev => prev.filter(v => v.mes !== mes));
   }
 
   const loadConfig = useCallback(async () => {
@@ -1316,7 +1371,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
       if (c.status === 'ATRASADO') {
         candidatos.push({ cliente: c, motivo: 'Em atraso — ligar hoje', icon: AlertTriangle, cor: 'var(--rust)', prioridade: 100 });
       }
-      if (c.proximo_contato && daysUntil(new Date(c.proximo_contato)) <= 0) {
+      if (c.proximo_contato && daysUntil(parseDataLocal(c.proximo_contato)) <= 0) {
         const motivoContato = c.status === 'PROSPECT' ? 'Follow-up de venda pendente' : 'Contato de pós-venda vencido';
         candidatos.push({ cliente: c, motivo: motivoContato, icon: Clock, cor: 'var(--slate)', prioridade: 90 });
       }
@@ -1373,17 +1428,43 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     const now = new Date();
     return enriched.reduce((sum, c) => {
       if (!c.data_compra || !c.valor_total) return sum;
-      const d = new Date(c.data_compra);
+      const d = parseDataLocal(c.data_compra);
       if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) return sum + c.valor_total;
       return sum;
     }, 0);
   }, [enriched]);
 
+  /** Últimos 6 meses: usa o ajuste manual se existir pro mês, senão soma direto dos
+   * clientes cadastrados (o jeito normal) — assim um mês com lançamento incompleto
+   * (ex: julho) pode ser corrigido sem mexer em cadastro de cliente nenhum. */
+  const historicoMensal = useMemo(() => {
+    const overridePorMes = new Map(vendasHistoricoMensal.map(v => [v.mes, v]));
+    const somaPorMesClientes = new Map<string, number>();
+    clients.forEach(c => {
+      if (!c.data_compra || !c.valor_total) return;
+      const key = monthKey(c.data_compra);
+      somaPorMesClientes.set(key, (somaPorMesClientes.get(key) ?? 0) + c.valor_total);
+    });
+    const hoje = new Date();
+    const meses: { mes: string; valor: number; manual: boolean }[] = [];
+    for (let i = 0; i < 6; i++) {
+      const ref = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      const key = `${ref.getFullYear()}-${String(ref.getMonth() + 1).padStart(2, '0')}`;
+      const override = overridePorMes.get(key);
+      meses.push({
+        mes: key,
+        valor: override ? override.valor_total : (somaPorMesClientes.get(key) ?? 0),
+        manual: !!override,
+      });
+    }
+    return meses;
+  }, [clients, vendasHistoricoMensal]);
+
   const comissaoMes = useMemo(() => {
     const now = new Date();
     return enriched.reduce((sum, c) => {
       if (!c.data_compra || !c.valor_total) return sum;
-      const d = new Date(c.data_compra);
+      const d = parseDataLocal(c.data_compra);
       if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
         return sum + comissaoVenda(c.produto, c.valor_total);
       }
@@ -1396,7 +1477,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     const totais: Record<CategoriaProduto, number> = { MOVEIS: 0, TV: 0, OUTROS: 0 };
     enriched.forEach(c => {
       if (!c.data_compra || !c.valor_total) return;
-      const d = new Date(c.data_compra);
+      const d = parseDataLocal(c.data_compra);
       if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
         const porCategoria = valorPorCategoria(c.produto, c.valor_total);
         CATEGORIA_ORDEM.forEach(cat => { totais[cat] += porCategoria[cat]; });
@@ -1424,7 +1505,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     const dias = diaFim - diaInicio + 1;
     const soma = enriched.reduce((sum, c) => {
       if (!c.data_compra || !c.valor_total) return sum;
-      const d = new Date(c.data_compra);
+      const d = parseDataLocal(c.data_compra);
       if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() >= diaInicio && d.getDate() <= diaFim) {
         return sum + c.valor_total;
       }
@@ -1439,7 +1520,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
       const d = new Date();
       d.setHours(0, 0, 0, 0);
       d.setDate(d.getDate() - i);
-      const iso = d.toISOString().slice(0, 10);
+      const iso = localIso(d);
       const valor = enriched.reduce((sum, c) => c.data_compra === iso ? sum + (c.valor_total || 0) : sum, 0);
       dias.push({ iso, valor });
     }
@@ -1452,7 +1533,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
       const d = new Date();
       d.setHours(0, 0, 0, 0);
       d.setDate(d.getDate() - i);
-      const iso = d.toISOString().slice(0, 10);
+      const iso = localIso(d);
       soma += enriched.reduce((sum, c) => c.data_compra === iso ? sum + (c.valor_total || 0) : sum, 0);
     }
     return soma;
@@ -2191,6 +2272,65 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                 <button type="button" className="btn primary" disabled={importandoLoja} onClick={handleImportarListaLoja}>
                   {importandoLoja ? 'Importando...' : 'Importar lista'}
                 </button>
+              </div>
+            )}
+          </div>
+
+          <div className="tendencia-card">
+            <button type="button" className="tendencia-header tendencia-header-toggle" onClick={() => setHistoricoMensalOpen(o => !o)}>
+              <div className="tendencia-title"><TrendingUp size={15} /> Histórico Mensal</div>
+              <ChevronDown size={16} style={{ transform: historicoMensalOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease' }} />
+            </button>
+            {historicoMensalOpen && (
+              <div style={{ marginTop: 10 }}>
+                <p className="gerente-vendedor-vazio" style={{ marginBottom: 8 }}>
+                  Por padrão soma direto dos clientes cadastrados. Se algum mês não teve toda venda
+                  lançada individualmente, dá pra ajustar o total manualmente.
+                </p>
+                <div className="duplicados-lista" style={{ marginTop: 0 }}>
+                  {historicoMensal.map(h => {
+                    const editando = editandoMesHistorico === h.mes;
+                    const label = monthLabel(h.mes);
+                    const labelCap = label.charAt(0).toUpperCase() + label.slice(1);
+                    if (editando) {
+                      return (
+                        <div key={h.mes} className="oferta-form" style={{ padding: 10 }}>
+                          <span style={{ alignSelf: 'center', fontSize: 13, fontWeight: 600 }}>{labelCap}</span>
+                          <input
+                            autoFocus
+                            placeholder="Valor total (ex: 64000)"
+                            value={valorHistoricoInput}
+                            onChange={e => setValorHistoricoInput(e.target.value)}
+                          />
+                          <button type="button" className="btn primary" disabled={salvandoHistoricoMensal} onClick={handleSalvarHistoricoMensal}>
+                            <Check size={13} /> {salvandoHistoricoMensal ? 'Salvando...' : 'Salvar'}
+                          </button>
+                          <button type="button" className="btn" onClick={() => setEditandoMesHistorico(null)}><X size={13} /></button>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={h.mes} className="duplicado-item">
+                        <div className="duplicado-info">
+                          <span className="duplicado-nome">{labelCap}</span>
+                          <span className="duplicado-status mono">
+                            {formatBRL(h.valor)}{h.manual ? ' · ajustado manualmente' : ''}
+                          </span>
+                        </div>
+                        <div className="duplicado-actions">
+                          <button type="button" className="duplicado-btn merge" onClick={() => handleStartEditHistoricoMensal(h.mes, h.valor)}>
+                            <Pencil size={12} /> {h.manual ? 'Editar' : 'Ajustar'}
+                          </button>
+                          {h.manual && (
+                            <button type="button" className="duplicado-btn" onClick={() => handleExcluirHistoricoMensal(h.mes)}>
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

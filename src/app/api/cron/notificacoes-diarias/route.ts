@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import webpush from 'web-push';
 import { Cliente } from '@/types';
+import { hojeIsoBrasil } from '@/lib/dataBrasil';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
     process.env.VAPID_PRIVATE_KEY!
   );
 
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeIsoBrasil();
 
   const { data: contatosData, error: contatosError } = await supabase
     .from('clientes')

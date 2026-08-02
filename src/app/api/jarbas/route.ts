@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { Cliente, StatusKey, STATUS } from '@/types';
 import { dentroDoLimite } from '@/lib/rateLimit';
+import { hojeIsoBrasil } from '@/lib/dataBrasil';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,10 +30,8 @@ AS 8 ATITUDES VENCEDORAS (mentalidade que a loja cobra do vendedor):
 Quando o Felipe pedir motivação, ou parecer desanimado/inseguro na pergunta, puxe gancho de uma ou duas dessas atitudes (não precisa listar todas de uma vez) em vez de dar uma frase motivacional genérica de internet.`;
 
 function buildResumo(clientes: Cliente[], metaMensal: number | null): string {
-  const hoje = new Date();
-  const anoAtual = hoje.getFullYear();
-  const mesAtual = hoje.getMonth();
-  const hojeIso = hoje.toISOString().slice(0, 10);
+  const hojeIso = hojeIsoBrasil();
+  const mesAtual = hojeIso.slice(0, 7); // 'YYYY-MM'
 
   const porStatus: Record<StatusKey, number> = { PROSPECT: 0, ATIVO: 0, ATRASADO: 0, NEGOCIANDO: 0, QUITADO: 0 };
   let vendasMes = 0;
@@ -40,9 +39,8 @@ function buildResumo(clientes: Cliente[], metaMensal: number | null): string {
 
   clientes.forEach(c => {
     porStatus[c.status] = (porStatus[c.status] ?? 0) + 1;
-    if (c.data_compra && c.valor_total) {
-      const d = new Date(c.data_compra);
-      if (d.getFullYear() === anoAtual && d.getMonth() === mesAtual) vendasMes += c.valor_total;
+    if (c.data_compra && c.valor_total && c.data_compra.slice(0, 7) === mesAtual) {
+      vendasMes += c.valor_total;
     }
     if (c.proximo_contato && c.proximo_contato <= hojeIso) contatosVencidos++;
   });
@@ -101,7 +99,7 @@ function buildClientesDetalhado(clientes: Cliente[]): string {
 }
 
 function buildPrioridades(clientes: Cliente[]): string {
-  const hojeIso = new Date().toISOString().slice(0, 10);
+  const hojeIso = hojeIsoBrasil();
   const lista: string[] = [];
   clientes.forEach(c => {
     if (c.status === 'ATRASADO') { lista.push(`- ${c.nome}: pagamento em atraso`); return; }

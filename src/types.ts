@@ -53,6 +53,15 @@ export interface Oferta {
   criado_em?: string;
 }
 
+export interface VendaHistoricoMensal {
+  id: string;
+  user_id?: string;
+  mes: string;
+  valor_total: number;
+  observacoes: string | null;
+  criado_em?: string;
+}
+
 export interface Lembrete {
   id: string;
   user_id?: string;
