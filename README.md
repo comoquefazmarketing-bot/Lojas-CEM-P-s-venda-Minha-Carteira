@@ -245,6 +245,30 @@ Sem migração nova.
   - `Strict-Transport-Security` (força HTTPS) e `Referrer-Policy`.
   - `Permissions-Policy` bloqueando câmera/microfone/geolocalização, que o app não usa.
 
+## Correção — bug de fuso horário fazendo vendas "sumirem" do mês
+
+Sem migração nova.
+
+Relatado: vendas do mês não estavam computando. Causa raiz: datas como `"2026-08-01"` (sem
+horário) viram meia-noite UTC quando passadas direto pro construtor `new Date(...)` — convertido
+pro horário de Brasília (fuso -3), isso "escorrega" pro dia/mês anterior. E o inverso também
+acontecia: `toISOString()` (usado pra descobrir "qual é hoje") converte PRA UTC antes de formatar,
+então depois das ~21h no horário do Brasil, o app já achava que era o dia seguinte.
+
+Isso afetava, todo santo dia à noite (não só na virada do mês):
+- Vendas do mês, comissão do mês, vendas por categoria e ritmo diário (`CarteiraApp`).
+- Gráfico de "últimos 14 dias" (podia atribuir a venda ao dia errado).
+- Contatos de follow-up vencidos, tanto na tela quanto no resumo que o Jarbas usa.
+- A notificação diária por push (rodava com a data errada quando calculada perto da virada).
+
+Corrigido criando dois jeitos seguros de lidar com data:
+- No navegador (`localIso`/`parseDataLocal`, em `CarteiraApp.tsx`/`GerenteApp.tsx`): usa os
+  componentes de ano/mês/dia locais em vez de `toISOString()`/`new Date(iso)` direto.
+- No servidor (`hojeIsoBrasil`, em `src/lib/dataBrasil.ts`): funções de API rodam na
+  infraestrutura da Vercel, que usa UTC como fuso do processo por padrão — mesmo pegando
+  "hora local" ali, não seria a hora do Brasil. Usa `Intl.DateTimeFormat` com fuso
+  `America/Sao_Paulo` explícito, testado e confirmado batendo certo perto da virada do dia.
+
 ## Estrutura
 
 ```

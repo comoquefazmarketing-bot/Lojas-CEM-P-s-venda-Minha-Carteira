@@ -16,7 +16,13 @@ function formatBRL(v: number | null | undefined) {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 function monthKey(iso: string) { return iso.slice(0, 7); }
-function todayIso() { return new Date().toISOString().slice(0, 10); }
+/** `toISOString()` converte pra UTC antes de formatar — depois das 21h no horário de
+ * Brasília (fuso negativo) isso já mostra o dia seguinte como "hoje". Usa os componentes
+ * locais em vez disso. */
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 type Profile = { user_id: string; email: string | null; nome: string | null; role: string };
 type Configuracao = { user_id: string; meta_mensal: number | null };

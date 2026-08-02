@@ -47,6 +47,13 @@ function formatDateBR(iso: string | null | undefined) {
   if (!y || !m || !d) return '—';
   return `${d}/${m}/${y}`;
 }
+/** "2026-08-01" vira meia-noite UTC se passar direto pro construtor de Date — em fuso
+ * negativo (Brasil) isso "escorrega" pro dia/mês anterior na hora de ler ano/mês/dia
+ * local. Sempre usar isso pra data-only (sem horário) em vez de `new Date(iso)`. */
+function parseDataLocal(iso: string): Date {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
 const WEEKDAY_ABBR = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 function weekdayAbbrev(iso: string) {
   const [y, m, d] = iso.split('-').map(Number);
@@ -84,7 +91,16 @@ function monthsElapsed(iso: string) {
 }
 function onlyDigits(s: string | null | undefined) { return (s || '').replace(/\D/g, ''); }
 function firstName(nome: string) { return (nome || '').trim().split(' ')[0] || ''; }
-function todayIso() { return new Date().toISOString().slice(0, 10); }
+/** Formata um Date pelos componentes LOCAIS (ano/mês/dia) — `toISOString()` converte pra
+ * UTC antes de formatar, o que troca de dia mais cedo que a meia-noite local sempre que o
+ * fuso é negativo (Brasil): depois das 21h já mostra o dia seguinte como "hoje". */
+function localIso(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dia}`;
+}
+function todayIso() { return localIso(new Date()); }
 
 /** dias até o próximo aniversário (0 = hoje), null se sem data */
 function daysUntilBirthday(iso: string | null): number | null {
@@ -191,7 +207,7 @@ type AcaoDoDia = {
 const emptyForm: Cliente = {
   id: '', nome: '', telefone: '', produto: '', forma_pagamento: 'PARCELADO',
   valor_total: null, valor_sinal: null, valor_parcela: null, numero_parcelas: null,
-  data_compra: new Date().toISOString().slice(0, 10),
+  data_compra: localIso(new Date()),
   dia_vencimento: null, status: 'ATIVO', observacoes: '', proximo_contato: null,
   data_nascimento: null, indicado_por: null, ultimo_contato: null, data_conversao: null,
 };
@@ -453,7 +469,7 @@ function ClienteCard({
     : null;
   const progresso = hasTermino ? Math.min(100, Math.round(((parcelasEstimadas as number) / Number(c.numero_parcelas)) * 100)) : 0;
   const terminandoEmBreve = c.status !== 'QUITADO' && c.diasParaTermino !== null && c.diasParaTermino <= 30;
-  const contatoPendente = c.proximo_contato ? daysUntil(new Date(c.proximo_contato)) <= 0 : false;
+  const contatoPendente = c.proximo_contato ? daysUntil(parseDataLocal(c.proximo_contato)) <= 0 : false;
   const [waOpen, setWaOpen] = useState(false);
   const waBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -1316,7 +1332,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
       if (c.status === 'ATRASADO') {
         candidatos.push({ cliente: c, motivo: 'Em atraso — ligar hoje', icon: AlertTriangle, cor: 'var(--rust)', prioridade: 100 });
       }
-      if (c.proximo_contato && daysUntil(new Date(c.proximo_contato)) <= 0) {
+      if (c.proximo_contato && daysUntil(parseDataLocal(c.proximo_contato)) <= 0) {
         const motivoContato = c.status === 'PROSPECT' ? 'Follow-up de venda pendente' : 'Contato de pós-venda vencido';
         candidatos.push({ cliente: c, motivo: motivoContato, icon: Clock, cor: 'var(--slate)', prioridade: 90 });
       }
@@ -1373,7 +1389,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     const now = new Date();
     return enriched.reduce((sum, c) => {
       if (!c.data_compra || !c.valor_total) return sum;
-      const d = new Date(c.data_compra);
+      const d = parseDataLocal(c.data_compra);
       if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) return sum + c.valor_total;
       return sum;
     }, 0);
@@ -1383,7 +1399,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     const now = new Date();
     return enriched.reduce((sum, c) => {
       if (!c.data_compra || !c.valor_total) return sum;
-      const d = new Date(c.data_compra);
+      const d = parseDataLocal(c.data_compra);
       if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
         return sum + comissaoVenda(c.produto, c.valor_total);
       }
@@ -1396,7 +1412,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     const totais: Record<CategoriaProduto, number> = { MOVEIS: 0, TV: 0, OUTROS: 0 };
     enriched.forEach(c => {
       if (!c.data_compra || !c.valor_total) return;
-      const d = new Date(c.data_compra);
+      const d = parseDataLocal(c.data_compra);
       if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
         const porCategoria = valorPorCategoria(c.produto, c.valor_total);
         CATEGORIA_ORDEM.forEach(cat => { totais[cat] += porCategoria[cat]; });
@@ -1424,7 +1440,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     const dias = diaFim - diaInicio + 1;
     const soma = enriched.reduce((sum, c) => {
       if (!c.data_compra || !c.valor_total) return sum;
-      const d = new Date(c.data_compra);
+      const d = parseDataLocal(c.data_compra);
       if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() >= diaInicio && d.getDate() <= diaFim) {
         return sum + c.valor_total;
       }
@@ -1439,7 +1455,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
       const d = new Date();
       d.setHours(0, 0, 0, 0);
       d.setDate(d.getDate() - i);
-      const iso = d.toISOString().slice(0, 10);
+      const iso = localIso(d);
       const valor = enriched.reduce((sum, c) => c.data_compra === iso ? sum + (c.valor_total || 0) : sum, 0);
       dias.push({ iso, valor });
     }
@@ -1452,7 +1468,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
       const d = new Date();
       d.setHours(0, 0, 0, 0);
       d.setDate(d.getDate() - i);
-      const iso = d.toISOString().slice(0, 10);
+      const iso = localIso(d);
       soma += enriched.reduce((sum, c) => c.data_compra === iso ? sum + (c.valor_total || 0) : sum, 0);
     }
     return soma;
