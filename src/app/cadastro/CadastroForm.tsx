@@ -105,6 +105,7 @@ export default function CadastroForm() {
           <div className="auth-field">
             <label>Código de convite</label>
             <input type="text" value={codigo} onChange={(e) => setCodigo(e.target.value)} required placeholder="peça pro seu gerente" />
+            <span className="auth-field-hint">Seu gerente gera esse código pra liberar sua conta — sem ele não dá pra criar login.</span>
           </div>
           <button className="auth-btn ripple-host" type="submit" disabled={loading} onClick={ripple}>
             {loading ? 'Criando conta...' : 'Criar conta'}

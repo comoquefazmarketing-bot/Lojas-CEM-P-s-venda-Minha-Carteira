@@ -9,6 +9,8 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { Cliente, Interacao, MetaHistorico, StatusKey, STATUS, STATUS_ORDER } from '@/types';
 import { splitProdutos } from '@/lib/produtos';
+import { HelpTip } from '@/components/HelpTip';
+import { ConfirmModal } from '@/components/ConfirmModal';
 
 function formatBRL(v: number | null | undefined) {
   const n = typeof v === 'number' ? v : parseFloat(String(v));
@@ -61,11 +63,17 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
   const [usuarios, setUsuarios] = useState<UsuarioGerencia[]>([]);
   const [usuariosOpen, setUsuariosOpen] = useState(false);
   const [destinoTransferencia, setDestinoTransferencia] = useState<Record<string, string>>({});
-  const [transferindo, setTransferindo] = useState<string | null>(null);
   const [metaLoja, setMetaLoja] = useState<number | null>(null);
   const [editandoMetaLoja, setEditandoMetaLoja] = useState(false);
   const [metaLojaInput, setMetaLojaInput] = useState('');
   const [salvandoMetaLoja, setSalvandoMetaLoja] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [confirmTransferir, setConfirmTransferir] = useState<{ deUserId: string; paraUserId: string; deNome: string; paraNome: string; qtd: number } | null>(null);
+  const [transferindoConfirmado, setTransferindoConfirmado] = useState(false);
+  const [confirmUsuario, setConfirmUsuario] = useState<{ userId: string; update: { ativo?: boolean; role?: string }; titulo: string; mensagem: string; danger: boolean } | null>(null);
+  const [alterandoConfirmado, setAlterandoConfirmado] = useState(false);
+
+  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 2400); }
 
   useEffect(() => {
     async function load() {
@@ -98,7 +106,7 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
 
   async function handleSalvarMetaLoja() {
     const valor = parseFloat(metaLojaInput.replace(/\./g, '').replace(',', '.'));
-    if (!valor || valor <= 0) { alert('Digita um valor válido pra meta da loja.'); return; }
+    if (!valor || valor <= 0) { showToast('Digita um valor válido pra meta da loja.'); return; }
     setSalvandoMetaLoja(true);
     const res = await fetch('/api/gerente/meta-loja', {
       method: 'PATCH',
@@ -106,7 +114,7 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
       body: JSON.stringify({ valor }),
     });
     setSalvandoMetaLoja(false);
-    if (!res.ok) { alert('Não consegui salvar a meta da loja.'); return; }
+    if (!res.ok) { showToast('Não consegui salvar a meta da loja.'); return; }
     setEditandoMetaLoja(false);
     loadMetaLoja();
   }
@@ -120,35 +128,78 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
 
   useEffect(() => { loadUsuarios(); }, [loadUsuarios]);
 
-  async function alterarUsuario(userId: string, update: { ativo?: boolean; role?: string }) {
+  function pedirAlteracaoUsuario(u: UsuarioGerencia, update: { ativo?: boolean; role?: string }) {
+    const nome = u.nome || u.email || '(sem nome)';
+    if (update.role) {
+      const viraGerente = update.role === 'gerente';
+      setConfirmUsuario({
+        userId: u.user_id, update,
+        titulo: viraGerente ? 'Promover a gerente?' : 'Rebaixar a vendedor?',
+        mensagem: viraGerente
+          ? `${nome} passa a ter acesso a esse painel gerencial e aos dados de todos os vendedores da loja.`
+          : `${nome} perde o acesso a esse painel gerencial e volta a ver só a própria carteira.`,
+        danger: !viraGerente,
+      });
+    } else {
+      const vaiAtivar = !!update.ativo;
+      setConfirmUsuario({
+        userId: u.user_id, update,
+        titulo: vaiAtivar ? 'Reativar usuário?' : 'Desativar usuário?',
+        mensagem: vaiAtivar
+          ? `${nome} volta a conseguir fazer login normalmente.`
+          : `${nome} não vai mais conseguir fazer login até ser reativado.`,
+        danger: !vaiAtivar,
+      });
+    }
+  }
+
+  async function confirmarAlteracaoUsuario() {
+    if (!confirmUsuario) return;
+    setAlterandoConfirmado(true);
     const res = await fetch('/api/gerente/usuarios', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, ...update }),
+      body: JSON.stringify({ user_id: confirmUsuario.userId, ...confirmUsuario.update }),
     });
+    setAlterandoConfirmado(false);
     if (!res.ok) {
       const data = await res.json().catch(() => null);
-      alert(data?.error || 'Não consegui atualizar esse usuário.');
+      showToast(data?.error || 'Não consegui atualizar esse usuário.');
+      setConfirmUsuario(null);
       return;
     }
+    setConfirmUsuario(null);
     loadUsuarios();
   }
 
-  async function handleTransferirCarteira(deUserId: string) {
+  function pedirTransferencia(deUserId: string) {
     const paraUserId = destinoTransferencia[deUserId];
-    if (!paraUserId) { alert('Escolhe pra quem transferir a carteira.'); return; }
-    if (!confirm('Transferir todos os clientes desse vendedor pro escolhido? Essa ação não pode ser desfeita.')) return;
-    setTransferindo(deUserId);
+    if (!paraUserId) { showToast('Escolhe pra quem transferir a carteira.'); return; }
+    const de = usuarios.find(u => u.user_id === deUserId);
+    const para = usuarios.find(u => u.user_id === paraUserId);
+    const qtd = vendedores.find(v => v.userId === deUserId)?.clientes.length ?? 0;
+    setConfirmTransferir({
+      deUserId, paraUserId,
+      deNome: de?.nome || de?.email || '(sem nome)',
+      paraNome: para?.nome || para?.email || '(sem nome)',
+      qtd,
+    });
+  }
+
+  async function confirmarTransferencia() {
+    if (!confirmTransferir) return;
+    setTransferindoConfirmado(true);
     const res = await fetch('/api/gerente/transferir-carteira', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ de_user_id: deUserId, para_user_id: paraUserId }),
+      body: JSON.stringify({ de_user_id: confirmTransferir.deUserId, para_user_id: confirmTransferir.paraUserId }),
     });
     const data = await res.json().catch(() => null);
-    setTransferindo(null);
-    if (!res.ok) { alert(data?.error || 'Não consegui transferir a carteira.'); return; }
-    alert(`${data.transferidos} cliente(s) transferido(s) com sucesso.`);
-    setDestinoTransferencia(prev => ({ ...prev, [deUserId]: '' }));
+    setTransferindoConfirmado(false);
+    if (!res.ok) { showToast(data?.error || 'Não consegui transferir a carteira.'); setConfirmTransferir(null); return; }
+    showToast(`${data.transferidos} cliente(s) transferido(s) com sucesso.`);
+    setDestinoTransferencia(prev => ({ ...prev, [confirmTransferir.deUserId]: '' }));
+    setConfirmTransferir(null);
     const [{ data: c }] = await Promise.all([supabase.from('clientes').select('*')]);
     setClientes((c as Cliente[]) ?? []);
   }
@@ -157,6 +208,16 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
     await supabase.auth.signOut();
     router.push('/login');
     router.refresh();
+  }
+
+  const [boasVindas, setBoasVindas] = useState(false);
+  useEffect(() => {
+    if (loading) return;
+    if (!localStorage.getItem('cem-gerente-boas-vindas-visto')) setBoasVindas(true);
+  }, [loading]);
+  function fecharBoasVindas() {
+    localStorage.setItem('cem-gerente-boas-vindas-visto', '1');
+    setBoasVindas(false);
   }
 
   const vendedores: VendedorResumo[] = useMemo(() => {
@@ -271,6 +332,16 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
         </div>
       </div>
 
+      {boasVindas && (
+        <div className="welcome-banner">
+          <div>
+            <strong>Esse é o painel de gerente.</strong> Diferente da carteira de vendedor, aqui você vê o resultado
+            de todos os vendedores da loja, define a meta geral e pode transferir carteiras ou gerenciar acessos.
+          </div>
+          <button type="button" className="welcome-banner-close" onClick={fecharBoasVindas}><X size={16} /></button>
+        </div>
+      )}
+
       <div className="meta-hero">
         <div className="meta-hero-top">
           <div className="meta-label"><Target size={15} /> Meta da loja — mês atual</div>
@@ -361,6 +432,7 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
                     <div className="gerente-indicador">
                       <Target size={13} />
                       <span>{v.pctContribuicaoLoja !== null ? `${v.pctContribuicaoLoja.toFixed(1)}%` : '—'} da meta da loja</span>
+                      <HelpTip label="% da meta da loja" text="Quanto esse vendedor já vendeu esse mês, dividido pela meta total da loja — mostra a fatia que ele contribuiu pro resultado geral." />
                     </div>
                     <div className="gerente-indicador">
                       <Users size={13} />
@@ -369,6 +441,7 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
                     <div className="gerente-indicador">
                       <Repeat size={13} />
                       <span>{v.conversoesMes} conversão{v.conversoesMes !== 1 ? 'ões' : ''} esse mês{v.taxaConversao !== null ? ` (${v.taxaConversao}% histórico)` : ''}</span>
+                      <HelpTip label="Taxa de conversão histórica" text="De todos os prospects que esse vendedor já cadastrou (convertidos + ainda em aberto), qual porcentagem virou venda de fato." />
                     </div>
                     <div className="gerente-indicador">
                       <ClipboardList size={13} />
@@ -470,15 +543,15 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
                     <button
                       type="button"
                       className="usuario-btn"
-                      disabled={!destinoTransferencia[u.user_id] || transferindo === u.user_id}
-                      onClick={() => handleTransferirCarteira(u.user_id)}
+                      disabled={!destinoTransferencia[u.user_id]}
+                      onClick={() => pedirTransferencia(u.user_id)}
                     >
-                      {transferindo === u.user_id ? 'Transferindo...' : 'Transferir'}
+                      Transferir
                     </button>
-                    <button type="button" className="usuario-btn" onClick={() => alterarUsuario(u.user_id, { role: u.role === 'gerente' ? 'vendedor' : 'gerente' })}>
+                    <button type="button" className="usuario-btn" onClick={() => pedirAlteracaoUsuario(u, { role: u.role === 'gerente' ? 'vendedor' : 'gerente' })}>
                       {u.role === 'gerente' ? 'Rebaixar a vendedor' : 'Promover a gerente'}
                     </button>
-                    <button type="button" className={`usuario-btn ${u.ativo ? 'perigo' : ''}`} onClick={() => alterarUsuario(u.user_id, { ativo: !u.ativo })}>
+                    <button type="button" className={`usuario-btn ${u.ativo ? 'perigo' : ''}`} onClick={() => pedirAlteracaoUsuario(u, { ativo: !u.ativo })}>
                       {u.ativo ? 'Desativar' : 'Reativar'}
                     </button>
                   </div>
@@ -488,6 +561,38 @@ export default function GerenteApp({ userEmail, userNome }: { userEmail: string;
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        open={!!confirmTransferir}
+        title="Transferir carteira?"
+        message={
+          confirmTransferir && (
+            <>
+              Move <strong>{confirmTransferir.qtd} cliente{confirmTransferir.qtd !== 1 ? 's' : ''}</strong> de{' '}
+              <strong>{confirmTransferir.deNome}</strong> pra <strong>{confirmTransferir.paraNome}</strong>. Essa ação não pode ser desfeita.
+            </>
+          )
+        }
+        confirmLabel="Transferir"
+        danger
+        loading={transferindoConfirmado}
+        typeToConfirm={confirmTransferir?.deNome}
+        onConfirm={confirmarTransferencia}
+        onCancel={() => setConfirmTransferir(null)}
+      />
+
+      <ConfirmModal
+        open={!!confirmUsuario}
+        title={confirmUsuario?.titulo || ''}
+        message={confirmUsuario?.mensagem || ''}
+        confirmLabel="Confirmar"
+        danger={confirmUsuario?.danger}
+        loading={alterandoConfirmado}
+        onConfirm={confirmarAlteracaoUsuario}
+        onCancel={() => setConfirmUsuario(null)}
+      />
+
+      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }
