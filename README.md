@@ -283,6 +283,18 @@ tabela `vendas_historico_mensal`).
   confundir com o valor calculado de verdade.
 - Sem essa migração, o painel mostra só o total calculado automático (sem opção de ajustar).
 
+## Correção — "dias restantes"/"vender por dia" agora considera dias úteis
+
+Sem migração nova.
+
+Pedido real: "dias restantes" e "vender por dia" contavam todo dia corrido do mês, inclusive
+domingo — mas o vendedor não trabalha aos domingos (trabalha de segunda a sábado). Isso inflava
+artificialmente a meta diária necessária.
+
+Agora `diasRestantes` conta só dias úteis (segunda a sábado) de hoje até o fim do mês — o rótulo
+na tela também muda pra "dias úteis restantes" pra deixar claro. Testado isoladamente comparando
+contagem de dias corridos vs dias úteis num mês real.
+
 ## Estrutura
 
 ```

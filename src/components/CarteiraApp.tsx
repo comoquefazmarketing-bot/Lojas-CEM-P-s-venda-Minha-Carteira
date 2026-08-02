@@ -47,6 +47,16 @@ function formatDateBR(iso: string | null | undefined) {
   if (!y || !m || !d) return '—';
   return `${d}/${m}/${y}`;
 }
+/** Conta dias úteis (segunda a sábado — sem domingo) de hoje até o fim do mês, incluindo
+ * hoje. Usado pra "dias restantes"/"vender por dia" refletirem dias que você realmente
+ * trabalha, não dias corridos do calendário. */
+function diasUteisRestantes(now: Date, diasNoMes: number): number {
+  let count = 0;
+  for (let dia = now.getDate(); dia <= diasNoMes; dia++) {
+    if (new Date(now.getFullYear(), now.getMonth(), dia).getDay() !== 0) count++;
+  }
+  return Math.max(1, count);
+}
 /** "2026-08-01" vira meia-noite UTC se passar direto pro construtor de Date — em fuso
  * negativo (Brasil) isso "escorrega" pro dia/mês anterior na hora de ler ano/mês/dia
  * local. Sempre usar isso pra data-only (sem horário) em vez de `new Date(iso)`. */
@@ -1639,7 +1649,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
   const metaCalc = useMemo(() => {
     const now = new Date();
     const diasNoMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const diasRestantes = Math.max(1, diasNoMes - now.getDate() + 1);
+    const diasRestantes = diasUteisRestantes(now, diasNoMes);
     const valorRestante = metaMensal ? Math.max(0, metaMensal - vendasMes) : null;
     const metaDiaria = valorRestante !== null ? valorRestante / diasRestantes : null;
     const pct = metaMensal && metaMensal > 0 ? Math.min(100, (vendasMes / metaMensal) * 100) : 0;
@@ -1959,7 +1969,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                 <div className="meta-mini-stats">
                   <div className="meta-mini">
                     <CalendarDays size={14} className="meta-mini-icon" />
-                    <div className="meta-mini-text"><div className="meta-mini-num mono">{Math.round(diasRestantesAnim)}</div><div className="meta-mini-label">dias restantes</div></div>
+                    <div className="meta-mini-text"><div className="meta-mini-num mono">{Math.round(diasRestantesAnim)}</div><div className="meta-mini-label">dias úteis restantes</div></div>
                   </div>
                   <div className="meta-mini">
                     <Wallet size={14} className="meta-mini-icon" />
