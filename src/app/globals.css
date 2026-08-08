@@ -955,6 +955,13 @@ body::before {
 }
 .form-field textarea { resize:vertical; min-height:60px; font-family:'IBM Plex Sans',sans-serif; }
 .form-field-hint { font-size:10.5px; color:var(--ink-soft); margin-top:1px; }
+.obs-sugestoes { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+.obs-sugestao-chip {
+  border:1px dashed var(--line); background:var(--surface); color:var(--ink-soft); font-size:11px;
+  padding:5px 10px; border-radius:999px; cursor:pointer; font-family:'IBM Plex Sans',sans-serif;
+  transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+.obs-sugestao-chip:hover { border-color:var(--gold); color:var(--gold); background:var(--pastel-gold); }
 .termino-preview { grid-column:1/-1; font-size:12.5px; color:var(--gold); font-family:'IBM Plex Mono',monospace; background:var(--pastel-gold); padding:8px 10px; border-radius:8px; }
 
 .origem-nova-row { display:flex; gap:6px; align-items:center; }

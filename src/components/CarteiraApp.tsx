@@ -239,6 +239,15 @@ const DISPARO_SCRIPT_BY_KEY: Record<string, ScriptDef> = Object.fromEntries(
   DISPARO_SCRIPT_OPTIONS.map(o => [o.key, o.def])
 );
 
+const OBSERVACOES_SUGERIDAS = [
+  'Verificar se recebeu o produto corretamente',
+  'Perguntar se está gostando do produto',
+  'Confirmar se a instalação/montagem foi feita sem problemas',
+  'Tirar dúvidas sobre o uso do produto',
+  'Verificar satisfação com o atendimento',
+  'Perguntar se já indicou pra alguém',
+];
+
 /** script padrão pra um cliente quando o disparo em massa está no modo "Automático" */
 function scriptAutoPara(c: Cliente): ScriptDef {
   if (c.origem === 'Indicado pela loja') return INDICADO_LOJA_SCRIPTS.parabenizacao;
@@ -1986,6 +1995,13 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     setForm({ ...form, produto: produtoItems.filter(p => p !== item).join(', ') });
   }
 
+  function addObservacaoSugerida(texto: string) {
+    const atual = (form.observacoes || '').trim();
+    if (atual.includes(texto)) return;
+    const novo = atual ? `${atual}\n${texto}` : texto;
+    setForm({ ...form, observacoes: novo });
+  }
+
   return (
     <div className="carteira-app">
       {isOffline && (
@@ -3041,6 +3057,18 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                       </div>
                       <div className="form-field full">
                         <label>Observações</label>
+                        <div className="obs-sugestoes">
+                          {OBSERVACOES_SUGERIDAS.map(s => (
+                            <button
+                              key={s}
+                              type="button"
+                              className="obs-sugestao-chip"
+                              onClick={() => addObservacaoSugerida(s)}
+                            >
+                              + {s}
+                            </button>
+                          ))}
+                        </div>
                         <textarea {...field('observacoes')} placeholder="Preferências, combinados, detalhes da negociação..." />
                       </div>
                     </div>
