@@ -2799,6 +2799,9 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                         <span className="tendencia-dia-nome">{c.nome}</span>
                         <span className="tendencia-dia-produto">{c.produto || '—'}</span>
                         <span className="tendencia-dia-valor mono">{formatBRL(c.valor_total)}</span>
+                        <button type="button" className="tendencia-dia-editar" onClick={() => openEdit(c)} title="Editar essa venda" aria-label={`Editar venda de ${c.nome}`}>
+                          <Pencil size={13} />
+                        </button>
                       </div>
                     ))
                   )}
