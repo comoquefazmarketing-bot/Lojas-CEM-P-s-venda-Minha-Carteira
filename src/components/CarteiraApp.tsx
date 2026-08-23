@@ -18,6 +18,7 @@ import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao, L
 import {
   type CategoriaProduto, CATEGORIA_LABELS, CATEGORIA_TAXA, CATEGORIA_ORDEM, SALARIO_MINIMO_GARANTIDO,
   PRODUTOS_SUGERIDOS, normalizeText, splitProdutos, categoriaProduto, valorPorCategoria, comissaoVenda,
+  analisarItemProduto,
 } from '@/lib/produtos';
 import { HelpTip } from '@/components/HelpTip';
 import { ConfirmModal } from '@/components/ConfirmModal';
@@ -718,6 +719,8 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
   const [categoriaInput, setCategoriaInput] = useState('');
   const [relatorioOpen, setRelatorioOpen] = useState(false);
   const [relatorioMes, setRelatorioMes] = useState(() => monthKey(todayIso()));
+  const [relatorioProdutoFiltro, setRelatorioProdutoFiltro] = useState('');
+  const [relatorioMarcaFiltro, setRelatorioMarcaFiltro] = useState('');
   const [pushSupported, setPushSupported] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
@@ -1717,6 +1720,21 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     setDiaSelecionado(prev => (prev === iso ? null : iso));
   }
 
+  // sugestões de produto = curadoria fixa + tudo que já foi digitado alguma vez nos seus
+  // clientes — assim qualquer produto "novo" que você cadastrar num cliente já vira sugestão
+  // pra sempre nos próximos cadastros, sem precisar de nenhuma ação extra
+  const produtosConhecidos = useMemo(() => {
+    const vistos = new Map<string, string>();
+    PRODUTOS_SUGERIDOS.forEach(p => vistos.set(normalizeText(p), p));
+    clients.forEach(c => {
+      splitProdutos(c.produto).forEach(item => {
+        const chave = normalizeText(item);
+        if (chave && !vistos.has(chave)) vistos.set(chave, item);
+      });
+    });
+    return [...vistos.values()];
+  }, [clients]);
+
   const produtosMaisVendidos = useMemo(() => {
     // conta ocorrências, não valor — uma venda com vários produtos não tem o preço de
     // cada item em separado, então "quanto vendeu de cada" seria uma estimativa falsa
@@ -1797,6 +1815,51 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     const clientesDoMes = [...doMes].sort((a, b) => (a.data_compra || '').localeCompare(b.data_compra || ''));
     return { clientesNovos: doMes.length, vendas, comissao, categorias, indicacoes, clientesDoMes };
   }, [enriched, relatorioMes]);
+
+  // separa produto e marca de cada item vendido no mês (ex: "Geladeira Electrolux" vira
+  // produto "Geladeira" + marca "Electrolux"), pra dar pra filtrar as duas coisas juntas
+  const relatorioProdutosMarcas = useMemo(() => {
+    const porProduto = new Map<string, { nome: string; count: number }>();
+    const porMarca = new Map<string, { nome: string; count: number }>();
+    relatorioData.clientesDoMes.forEach(c => {
+      splitProdutos(c.produto).forEach(item => {
+        const { produtoBase, marca } = analisarItemProduto(item);
+        const chaveP = normalizeText(produtoBase);
+        if (chaveP) {
+          const atual = porProduto.get(chaveP) || { nome: produtoBase, count: 0 };
+          atual.count += 1;
+          porProduto.set(chaveP, atual);
+        }
+        if (marca) {
+          const chaveM = normalizeText(marca);
+          const atual = porMarca.get(chaveM) || { nome: marca, count: 0 };
+          atual.count += 1;
+          porMarca.set(chaveM, atual);
+        }
+      });
+    });
+    return {
+      produtos: [...porProduto.values()].sort((a, b) => b.count - a.count || a.nome.localeCompare(b.nome)),
+      marcas: [...porMarca.values()].sort((a, b) => b.count - a.count || a.nome.localeCompare(b.nome)),
+    };
+  }, [relatorioData.clientesDoMes]);
+
+  const relatorioClientesFiltrados = useMemo(() => {
+    if (!relatorioProdutoFiltro && !relatorioMarcaFiltro) return relatorioData.clientesDoMes;
+    return relatorioData.clientesDoMes.filter(c =>
+      splitProdutos(c.produto).some(item => {
+        const { produtoBase, marca } = analisarItemProduto(item);
+        const bateProduto = !relatorioProdutoFiltro || produtoBase === relatorioProdutoFiltro;
+        const bateMarca = !relatorioMarcaFiltro || marca === relatorioMarcaFiltro;
+        return bateProduto && bateMarca;
+      })
+    );
+  }, [relatorioData.clientesDoMes, relatorioProdutoFiltro, relatorioMarcaFiltro]);
+
+  useEffect(() => {
+    setRelatorioProdutoFiltro('');
+    setRelatorioMarcaFiltro('');
+  }, [relatorioMes]);
 
   const metaCalc = useMemo(() => {
     const now = new Date();
@@ -1979,7 +2042,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
   const isProspectForm = form.status === 'PROSPECT';
 
   const produtoItems = splitProdutos(form.produto);
-  const produtoSugestoesFiltradas = PRODUTOS_SUGERIDOS.filter(p =>
+  const produtoSugestoesFiltradas = produtosConhecidos.filter(p =>
     !produtoItems.some(item => item.toLowerCase() === p.toLowerCase()) &&
     (produtoDraft.trim() === '' || normalizeText(p).includes(normalizeText(produtoDraft)))
   ).slice(0, 8);
@@ -3221,11 +3284,60 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                     ))}
                   </div>
 
+                  {(relatorioProdutosMarcas.produtos.length > 0 || relatorioProdutosMarcas.marcas.length > 0) && (
+                    <div className="relatorio-categorias">
+                      <div className="relatorio-categorias-title">
+                        Produtos do mês
+                        <HelpTip label="Produtos e marcas" text="Clica num produto e/ou numa marca pra filtrar a lista de clientes do mês só com quem comprou aquilo. Clica de novo pra tirar o filtro." />
+                      </div>
+                      <div className="relatorio-chip-row">
+                        <button type="button" className={`relatorio-chip ${!relatorioProdutoFiltro ? 'active' : ''}`} onClick={() => setRelatorioProdutoFiltro('')}>
+                          Todos
+                        </button>
+                        {relatorioProdutosMarcas.produtos.map(p => (
+                          <button
+                            key={p.nome}
+                            type="button"
+                            className={`relatorio-chip ${relatorioProdutoFiltro === p.nome ? 'active' : ''}`}
+                            onClick={() => setRelatorioProdutoFiltro(f => (f === p.nome ? '' : p.nome))}
+                          >
+                            {p.nome} <span className="mono">{p.count}</span>
+                          </button>
+                        ))}
+                      </div>
+                      {relatorioProdutosMarcas.marcas.length > 0 && (
+                        <>
+                          <div className="relatorio-categorias-title" style={{ marginTop: 12 }}>Marcas do mês</div>
+                          <div className="relatorio-chip-row">
+                            <button type="button" className={`relatorio-chip ${!relatorioMarcaFiltro ? 'active' : ''}`} onClick={() => setRelatorioMarcaFiltro('')}>
+                              Todas
+                            </button>
+                            {relatorioProdutosMarcas.marcas.map(m => (
+                              <button
+                                key={m.nome}
+                                type="button"
+                                className={`relatorio-chip ${relatorioMarcaFiltro === m.nome ? 'active' : ''}`}
+                                onClick={() => setRelatorioMarcaFiltro(f => (f === m.nome ? '' : m.nome))}
+                              >
+                                {m.nome} <span className="mono">{m.count}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   {relatorioData.clientesDoMes.length > 0 && (
                     <div className="relatorio-clientes">
-                      <div className="relatorio-categorias-title">Clientes do mês ({relatorioData.clientesDoMes.length})</div>
+                      <div className="relatorio-categorias-title">
+                        Clientes do mês ({relatorioClientesFiltrados.length}{relatorioClientesFiltrados.length !== relatorioData.clientesDoMes.length ? ` de ${relatorioData.clientesDoMes.length}` : ''})
+                      </div>
+                      {relatorioClientesFiltrados.length === 0 && (
+                        <p className="gerente-vendedor-vazio">Ninguém comprou essa combinação de produto/marca esse mês.</p>
+                      )}
                       <div className="relatorio-clientes-lista">
-                        {relatorioData.clientesDoMes.map(c => (
+                        {relatorioClientesFiltrados.map(c => (
                           <div key={c.id} className="relatorio-cliente-card">
                             <div className="relatorio-cliente-top">
                               <span className="relatorio-cliente-nome">{c.nome}</span>

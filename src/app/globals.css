@@ -1092,6 +1092,13 @@ body::before {
 .relatorio-categorias-title { font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--ink-soft); margin-bottom:8px; }
 .relatorio-categoria-row { display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:1px solid var(--paper-alt); }
 .relatorio-categoria-row:last-child { border-bottom:none; }
+.relatorio-chip-row { display:flex; flex-wrap:wrap; gap:6px; }
+.relatorio-chip {
+  display:flex; align-items:center; gap:5px; border:1px solid var(--line); background:var(--surface); color:var(--ink-soft);
+  border-radius:999px; padding:5px 11px; font-size:12px; cursor:pointer; font-family:'IBM Plex Sans',sans-serif;
+}
+.relatorio-chip:hover { border-color:var(--gold); color:var(--ink); }
+.relatorio-chip.active { background:var(--gold); border-color:var(--gold); color:#fff; }
 
 .relatorio-print-header { display:none; }
 .relatorio-clientes { border-top:1px solid var(--line); padding-top:12px; margin-top:14px; }
