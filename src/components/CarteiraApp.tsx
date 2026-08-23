@@ -18,6 +18,7 @@ import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao, L
 import {
   type CategoriaProduto, CATEGORIA_LABELS, CATEGORIA_TAXA, CATEGORIA_ORDEM, SALARIO_MINIMO_GARANTIDO,
   PRODUTOS_SUGERIDOS, normalizeText, splitProdutos, categoriaProduto, valorPorCategoria, comissaoVenda,
+  analisarItemProduto,
 } from '@/lib/produtos';
 import { HelpTip } from '@/components/HelpTip';
 import { ConfirmModal } from '@/components/ConfirmModal';
@@ -275,6 +276,13 @@ type AcaoDoDia = {
   prioridade: number;
 };
 
+/** resumo de contatos feitos (via WhatsApp) com um cliente — contado a partir de cada clique
+ * num script de mensagem, registrado como interação. `recentes` traz os últimos assuntos. */
+type ContatoResumo = {
+  count: number;
+  recentes: { data: string; assunto: string }[];
+};
+
 const emptyForm: Cliente = {
   id: '', nome: '', telefone: '', produto: '', forma_pagamento: 'PARCELADO',
   valor_total: null, valor_sinal: null, valor_parcela: null, numero_parcelas: null,
@@ -364,7 +372,7 @@ function Termometro({ t }: { t: 'quente' | 'morno' | 'frio' }) {
   return <span className="termo termo-frio" title="Esfriando — reative o contato"><Snowflake size={12} /> Frio</span>;
 }
 
-function WaMenu({ c, onClose, anchorRect }: { c: Cliente; onClose: () => void; anchorRect: DOMRect }) {
+function WaMenu({ c, onClose, anchorRect, onEnviar }: { c: Cliente; onClose: () => void; anchorRect: DOMRect; onEnviar: (assunto: string) => void }) {
   useEffect(() => {
     function onDocClick() { onClose(); }
     document.addEventListener('click', onDocClick);
@@ -400,7 +408,7 @@ function WaMenu({ c, onClose, anchorRect }: { c: Cliente; onClose: () => void; a
             href={waLinkWithText(c.telefone, s.build(c.nome, c.produto))}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={onClose}
+            onClick={() => { onEnviar(s.label); onClose(); }}
           >
             <Icon size={14} /> {s.label}
           </a>
@@ -527,6 +535,7 @@ function KanbanCard({
 
 function ClienteCard({
   c, onEdit, onDelete, onMarcarContato, onConverter, indicadorNome, selectionMode, selected, onToggleSelect,
+  contato, onEnviarScript,
 }: {
   c: EnrichedCliente;
   onEdit: (c: Cliente) => void;
@@ -537,6 +546,8 @@ function ClienteCard({
   selectionMode: boolean;
   selected: boolean;
   onToggleSelect: (id: string) => void;
+  contato: ContatoResumo | undefined;
+  onEnviarScript: (clienteId: string, assunto: string) => void;
 }) {
   const s = STATUS[c.status] || STATUS.ATIVO;
   const isProspect = c.status === 'PROSPECT';
@@ -578,6 +589,15 @@ function ClienteCard({
               {indicadorNome && <span className="ref-tag">indicado por {indicadorNome}</span>}
               {c.origem && <span className="ref-tag ref-tag-gold">{c.origem}</span>}
               {c.indicacoesFeitas > 0 && <span className="ref-tag ref-tag-gold"><Handshake size={11} /> {c.indicacoesFeitas} indicação{c.indicacoesFeitas > 1 ? 'ões' : ''}</span>}
+              {contato && contato.count > 0 && (
+                <span className="ref-tag">
+                  <MessageCircle size={11} /> {contato.count}x contatado
+                  <HelpTip
+                    label="Últimos contatos"
+                    text={contato.recentes.map(r => `${formatDateBR(r.data)} — ${r.assunto}`).join('\n')}
+                  />
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -663,7 +683,12 @@ function ClienteCard({
             <div style={{ position: 'relative' }}>
               <button ref={waBtnRef} className="icon-btn wa" title="WhatsApp" aria-label="Abrir menu do WhatsApp" onClick={() => setWaOpen(o => !o)}><MessageCircle size={16} /></button>
               {waOpen && waBtnRef.current && (
-                <WaMenu c={c} onClose={() => setWaOpen(false)} anchorRect={waBtnRef.current.getBoundingClientRect()} />
+                <WaMenu
+                  c={c}
+                  onClose={() => setWaOpen(false)}
+                  anchorRect={waBtnRef.current.getBoundingClientRect()}
+                  onEnviar={assunto => onEnviarScript(c.id, assunto)}
+                />
               )}
             </div>
           </>
@@ -712,12 +737,15 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
   const [acaoDoDiaOpen, setAcaoDoDiaOpen] = useState(true);
   const [oportunidadesExcluidas, setOportunidadesExcluidas] = useState<Set<string>>(new Set());
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
+  const [interacoesResumo, setInteracoesResumo] = useState<{ cliente_id: string; nota: string; data: string }[]>([]);
   const [novaNota, setNovaNota] = useState('');
   const [metasCategoria, setMetasCategoria] = useState<Record<CategoriaProduto, number | null>>({ MOVEIS: null, TV: null, OUTROS: null });
   const [editingCategoria, setEditingCategoria] = useState<CategoriaProduto | null>(null);
   const [categoriaInput, setCategoriaInput] = useState('');
   const [relatorioOpen, setRelatorioOpen] = useState(false);
   const [relatorioMes, setRelatorioMes] = useState(() => monthKey(todayIso()));
+  const [relatorioProdutoFiltro, setRelatorioProdutoFiltro] = useState('');
+  const [relatorioMarcaFiltro, setRelatorioMarcaFiltro] = useState('');
   const [pushSupported, setPushSupported] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
@@ -880,9 +908,10 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
   async function handleDisparoEnviar() {
     const c = disparoClientes[disparoIndex];
     if (!c) return;
+    const script = disparoScriptKey === 'auto' ? scriptAutoPara(c) : (DISPARO_SCRIPT_BY_KEY[disparoScriptKey] || scriptAutoPara(c));
     window.open(waLinkWithText(c.telefone, disparoMsg), '_blank', 'noopener,noreferrer');
     setDisparoEnviados(prev => new Set(prev).add(c.id));
-    await supabase.from('clientes').update({ ultimo_contato: todayIso() }).eq('id', c.id);
+    await handleRegistrarContatoWhatsApp(c.id, script.label);
     setDisparoIndex(i => i + 1);
   }
 
@@ -1228,6 +1257,44 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     setInteracoes((data as Interacao[]) ?? []);
   }
 
+  // resumo leve (todos os clientes, só o essencial) pra mostrar "quantas vezes já contatei"
+  // no card da lista sem precisar abrir cada cliente
+  const loadInteracoesResumo = useCallback(async () => {
+    const { data } = await supabase
+      .from('interacoes')
+      .select('cliente_id, nota, data')
+      .order('data', { ascending: false })
+      .order('criado_em', { ascending: false });
+    setInteracoesResumo(data ?? []);
+  }, [supabase]);
+  useEffect(() => { loadInteracoesResumo(); }, [loadInteracoesResumo]);
+
+  const contatosPorCliente = useMemo(() => {
+    const map = new Map<string, ContatoResumo>();
+    interacoesResumo.forEach(i => {
+      const atual = map.get(i.cliente_id) || { count: 0, recentes: [] };
+      atual.count += 1;
+      if (atual.recentes.length < 3) atual.recentes.push({ data: i.data, assunto: i.nota });
+      map.set(i.cliente_id, atual);
+    });
+    return map;
+  }, [interacoesResumo]);
+
+  /** registra um contato feito por WhatsApp (clique num script de mensagem) como uma
+   * interação — assim dá pra contar quantas vezes e sobre qual assunto já se falou com
+   * cada cliente, sem depender de anotação manual. */
+  async function handleRegistrarContatoWhatsApp(clienteId: string, assunto: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('interacoes').insert({
+      cliente_id: clienteId, user_id: user.id, nota: `WhatsApp: ${assunto}`, data: todayIso(),
+    });
+    await supabase.from('clientes').update({ ultimo_contato: todayIso() }).eq('id', clienteId);
+    loadInteracoesResumo();
+    if (form.id === clienteId) loadInteracoes(clienteId);
+    loadClients({ silent: true });
+  }
+
   function openAdd(status: StatusKey = 'ATIVO') {
     setForm({ ...emptyForm, id: '', status, data_compra: status === 'PROSPECT' ? null : emptyForm.data_compra });
     setOriginalStatus(null);
@@ -1254,6 +1321,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     await supabase.from('clientes').update({ ultimo_contato: todayIso() }).eq('id', form.id);
     setNovaNota('');
     loadInteracoes(form.id);
+    loadInteracoesResumo();
     loadClients({ silent: true });
   }
 
@@ -1261,6 +1329,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     const { error } = await supabase.from('interacoes').delete().eq('id', id);
     if (error) { showToast('Não consegui excluir'); return; }
     setInteracoes(prev => prev.filter(i => i.id !== id));
+    loadInteracoesResumo();
   }
 
   async function confirmarExclusaoGenerica() {
@@ -1717,6 +1786,21 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     setDiaSelecionado(prev => (prev === iso ? null : iso));
   }
 
+  // sugestões de produto = curadoria fixa + tudo que já foi digitado alguma vez nos seus
+  // clientes — assim qualquer produto "novo" que você cadastrar num cliente já vira sugestão
+  // pra sempre nos próximos cadastros, sem precisar de nenhuma ação extra
+  const produtosConhecidos = useMemo(() => {
+    const vistos = new Map<string, string>();
+    PRODUTOS_SUGERIDOS.forEach(p => vistos.set(normalizeText(p), p));
+    clients.forEach(c => {
+      splitProdutos(c.produto).forEach(item => {
+        const chave = normalizeText(item);
+        if (chave && !vistos.has(chave)) vistos.set(chave, item);
+      });
+    });
+    return [...vistos.values()];
+  }, [clients]);
+
   const produtosMaisVendidos = useMemo(() => {
     // conta ocorrências, não valor — uma venda com vários produtos não tem o preço de
     // cada item em separado, então "quanto vendeu de cada" seria uma estimativa falsa
@@ -1797,6 +1881,51 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     const clientesDoMes = [...doMes].sort((a, b) => (a.data_compra || '').localeCompare(b.data_compra || ''));
     return { clientesNovos: doMes.length, vendas, comissao, categorias, indicacoes, clientesDoMes };
   }, [enriched, relatorioMes]);
+
+  // separa produto e marca de cada item vendido no mês (ex: "Geladeira Electrolux" vira
+  // produto "Geladeira" + marca "Electrolux"), pra dar pra filtrar as duas coisas juntas
+  const relatorioProdutosMarcas = useMemo(() => {
+    const porProduto = new Map<string, { nome: string; count: number }>();
+    const porMarca = new Map<string, { nome: string; count: number }>();
+    relatorioData.clientesDoMes.forEach(c => {
+      splitProdutos(c.produto).forEach(item => {
+        const { produtoBase, marca } = analisarItemProduto(item);
+        const chaveP = normalizeText(produtoBase);
+        if (chaveP) {
+          const atual = porProduto.get(chaveP) || { nome: produtoBase, count: 0 };
+          atual.count += 1;
+          porProduto.set(chaveP, atual);
+        }
+        if (marca) {
+          const chaveM = normalizeText(marca);
+          const atual = porMarca.get(chaveM) || { nome: marca, count: 0 };
+          atual.count += 1;
+          porMarca.set(chaveM, atual);
+        }
+      });
+    });
+    return {
+      produtos: [...porProduto.values()].sort((a, b) => b.count - a.count || a.nome.localeCompare(b.nome)),
+      marcas: [...porMarca.values()].sort((a, b) => b.count - a.count || a.nome.localeCompare(b.nome)),
+    };
+  }, [relatorioData.clientesDoMes]);
+
+  const relatorioClientesFiltrados = useMemo(() => {
+    if (!relatorioProdutoFiltro && !relatorioMarcaFiltro) return relatorioData.clientesDoMes;
+    return relatorioData.clientesDoMes.filter(c =>
+      splitProdutos(c.produto).some(item => {
+        const { produtoBase, marca } = analisarItemProduto(item);
+        const bateProduto = !relatorioProdutoFiltro || produtoBase === relatorioProdutoFiltro;
+        const bateMarca = !relatorioMarcaFiltro || marca === relatorioMarcaFiltro;
+        return bateProduto && bateMarca;
+      })
+    );
+  }, [relatorioData.clientesDoMes, relatorioProdutoFiltro, relatorioMarcaFiltro]);
+
+  useEffect(() => {
+    setRelatorioProdutoFiltro('');
+    setRelatorioMarcaFiltro('');
+  }, [relatorioMes]);
 
   const metaCalc = useMemo(() => {
     const now = new Date();
@@ -1979,7 +2108,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
   const isProspectForm = form.status === 'PROSPECT';
 
   const produtoItems = splitProdutos(form.produto);
-  const produtoSugestoesFiltradas = PRODUTOS_SUGERIDOS.filter(p =>
+  const produtoSugestoesFiltradas = produtosConhecidos.filter(p =>
     !produtoItems.some(item => item.toLowerCase() === p.toLowerCase()) &&
     (produtoDraft.trim() === '' || normalizeText(p).includes(normalizeText(produtoDraft)))
   ).slice(0, 8);
@@ -2302,21 +2431,24 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                       <div className="acao-dia-texto">
                         <strong>{cliente.nome}</strong> — {motivo}
                       </div>
-                      <a
-                        className="mini-btn wa-mini"
-                        href={waLinkWithText(
-                          cliente.telefone,
-                          cliente.origem === 'Indicado pela loja'
-                            ? INDICADO_LOJA_SCRIPTS.parabenizacao.build(cliente.nome, cliente.produto)
-                            : cliente.status === 'PROSPECT'
-                            ? PROSPECT_SCRIPTS.abordagem.build(cliente.nome, cliente.produto)
-                            : SCRIPTS.posvenda.build(cliente.nome, cliente.produto)
-                        )}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <MessageCircle size={12} /> Chamar
-                      </a>
+                      {(() => {
+                        const script = cliente.origem === 'Indicado pela loja'
+                          ? INDICADO_LOJA_SCRIPTS.parabenizacao
+                          : cliente.status === 'PROSPECT'
+                          ? PROSPECT_SCRIPTS.abordagem
+                          : SCRIPTS.posvenda;
+                        return (
+                          <a
+                            className="mini-btn wa-mini"
+                            href={waLinkWithText(cliente.telefone, script.build(cliente.nome, cliente.produto))}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => handleRegistrarContatoWhatsApp(cliente.id, script.label)}
+                          >
+                            <MessageCircle size={12} /> Chamar
+                          </a>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
@@ -2860,6 +2992,8 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                   selectionMode={selectionMode}
                   selected={selectedIds.has(c.id)}
                   onToggleSelect={toggleSelected}
+                  contato={contatosPorCliente.get(c.id)}
+                  onEnviarScript={handleRegistrarContatoWhatsApp}
                 />
               ))}
             </div>
@@ -3221,11 +3355,60 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                     ))}
                   </div>
 
+                  {(relatorioProdutosMarcas.produtos.length > 0 || relatorioProdutosMarcas.marcas.length > 0) && (
+                    <div className="relatorio-categorias">
+                      <div className="relatorio-categorias-title">
+                        Produtos do mês
+                        <HelpTip label="Produtos e marcas" text="Clica num produto e/ou numa marca pra filtrar a lista de clientes do mês só com quem comprou aquilo. Clica de novo pra tirar o filtro." />
+                      </div>
+                      <div className="relatorio-chip-row">
+                        <button type="button" className={`relatorio-chip ${!relatorioProdutoFiltro ? 'active' : ''}`} onClick={() => setRelatorioProdutoFiltro('')}>
+                          Todos
+                        </button>
+                        {relatorioProdutosMarcas.produtos.map(p => (
+                          <button
+                            key={p.nome}
+                            type="button"
+                            className={`relatorio-chip ${relatorioProdutoFiltro === p.nome ? 'active' : ''}`}
+                            onClick={() => setRelatorioProdutoFiltro(f => (f === p.nome ? '' : p.nome))}
+                          >
+                            {p.nome} <span className="mono">{p.count}</span>
+                          </button>
+                        ))}
+                      </div>
+                      {relatorioProdutosMarcas.marcas.length > 0 && (
+                        <>
+                          <div className="relatorio-categorias-title" style={{ marginTop: 12 }}>Marcas do mês</div>
+                          <div className="relatorio-chip-row">
+                            <button type="button" className={`relatorio-chip ${!relatorioMarcaFiltro ? 'active' : ''}`} onClick={() => setRelatorioMarcaFiltro('')}>
+                              Todas
+                            </button>
+                            {relatorioProdutosMarcas.marcas.map(m => (
+                              <button
+                                key={m.nome}
+                                type="button"
+                                className={`relatorio-chip ${relatorioMarcaFiltro === m.nome ? 'active' : ''}`}
+                                onClick={() => setRelatorioMarcaFiltro(f => (f === m.nome ? '' : m.nome))}
+                              >
+                                {m.nome} <span className="mono">{m.count}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   {relatorioData.clientesDoMes.length > 0 && (
                     <div className="relatorio-clientes">
-                      <div className="relatorio-categorias-title">Clientes do mês ({relatorioData.clientesDoMes.length})</div>
+                      <div className="relatorio-categorias-title">
+                        Clientes do mês ({relatorioClientesFiltrados.length}{relatorioClientesFiltrados.length !== relatorioData.clientesDoMes.length ? ` de ${relatorioData.clientesDoMes.length}` : ''})
+                      </div>
+                      {relatorioClientesFiltrados.length === 0 && (
+                        <p className="gerente-vendedor-vazio">Ninguém comprou essa combinação de produto/marca esse mês.</p>
+                      )}
                       <div className="relatorio-clientes-lista">
-                        {relatorioData.clientesDoMes.map(c => (
+                        {relatorioClientesFiltrados.map(c => (
                           <div key={c.id} className="relatorio-cliente-card">
                             <div className="relatorio-cliente-top">
                               <span className="relatorio-cliente-nome">{c.nome}</span>

@@ -39,6 +39,34 @@ const MARCAS = [
   'aoc', 'sony', 'tcl', 'philips', 'semp', 'positivo',
 ];
 
+// nome de exibição de cada marca (a lista MARCAS acima é normalizada/minúscula, usada só
+// pra comparação) — pesquisado com base no que a Lojas CEM efetivamente vende: linha branca
+// (geladeira/fogão) é majoritariamente Brastemp, Consul, Electrolux, Midea e Panasonic
+export const MARCAS_LABELS: Record<string, string> = {
+  brastemp: 'Brastemp', consul: 'Consul', electrolux: 'Electrolux', lg: 'LG', samsung: 'Samsung',
+  philco: 'Philco', midea: 'Midea', panasonic: 'Panasonic', fischer: 'Fischer', continental: 'Continental',
+  britania: 'Britânia', mabe: 'Mabe', esmaltec: 'Esmaltec', springer: 'Springer', elgin: 'Elgin',
+  multilaser: 'Multilaser', aoc: 'AOC', sony: 'Sony', tcl: 'TCL', philips: 'Philips', semp: 'Semp', positivo: 'Positivo',
+};
+
+/** Separa a marca (se houver) do nome do produto dentro de um item digitado livremente —
+ * ex: "Geladeira Electrolux" vira { produtoBase: "Geladeira", marca: "Electrolux" }.
+ * Usado pra filtrar o relatório por produto e por marca separadamente. */
+export function analisarItemProduto(item: string): { produtoBase: string; marca: string | null } {
+  const norm = normalizeText(item);
+  for (const chave of MARCAS) {
+    if (new RegExp(`\\b${chave}\\b`).test(norm)) {
+      const semMarca = item
+        .replace(new RegExp(`\\b${chave}\\b`, 'ig'), '')
+        .replace(/\s{2,}/g, ' ')
+        .trim()
+        .replace(/^[,\-\s]+|[,\-\s]+$/g, '');
+      return { produtoBase: semMarca || item, marca: MARCAS_LABELS[chave] };
+    }
+  }
+  return { produtoBase: item, marca: null };
+}
+
 /** Detecta se um "item" digitado é só tamanho/marca (ex: "43\" AOC"), não um produto à parte —
  * senão ele rouba metade do valor da venda de categorização/comissão do produto real. */
 function ehApenasEspecificacao(item: string): boolean {

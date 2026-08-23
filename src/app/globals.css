@@ -749,7 +749,7 @@ body::before {
 .termo-quente { background: var(--pastel-quente-bg); color: var(--pastel-quente-fg); }
 .termo-morno { background: var(--pastel-morno-bg); color: var(--pastel-morno-fg); }
 .termo-frio { background: var(--pastel-frio-bg); color: var(--slate); }
-.ref-tag { font-size: 10.5px; color: var(--ink-soft); background: var(--paper-alt); padding: 2px 7px; border-radius: 999px; }
+.ref-tag { font-size: 10.5px; color: var(--ink-soft); background: var(--paper-alt); padding: 2px 7px; border-radius: 999px; display: inline-flex; align-items: center; gap: 3px; }
 .ref-tag-gold { color: var(--gold); background: var(--pastel-gold); display: inline-flex; align-items: center; gap: 3px; }
 .vip-star { display: inline; margin-left: 5px; vertical-align: middle; color: var(--gold); }
 
@@ -1092,6 +1092,13 @@ body::before {
 .relatorio-categorias-title { font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--ink-soft); margin-bottom:8px; }
 .relatorio-categoria-row { display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:1px solid var(--paper-alt); }
 .relatorio-categoria-row:last-child { border-bottom:none; }
+.relatorio-chip-row { display:flex; flex-wrap:wrap; gap:6px; }
+.relatorio-chip {
+  display:flex; align-items:center; gap:5px; border:1px solid var(--line); background:var(--surface); color:var(--ink-soft);
+  border-radius:999px; padding:5px 11px; font-size:12px; cursor:pointer; font-family:'IBM Plex Sans',sans-serif;
+}
+.relatorio-chip:hover { border-color:var(--gold); color:var(--ink); }
+.relatorio-chip.active { background:var(--gold); border-color:var(--gold); color:#fff; }
 
 .relatorio-print-header { display:none; }
 .relatorio-clientes { border-top:1px solid var(--line); padding-top:12px; margin-top:14px; }
@@ -1176,6 +1183,7 @@ body::before {
   width:240px; background:var(--modal-bg); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
   border:1px solid var(--surface-glass-border); border-radius:10px; padding:11px 13px; font-size:12.5px; line-height:1.5;
   color:var(--ink); box-shadow:0 12px 28px rgba(15,25,55,0.22); z-index:80; animation: fadeInUp 0.15s ease both;
+  white-space:pre-line;
 }
 .help-tip-pop-title { font-weight:700; font-size:12px; margin-bottom:4px; color:var(--gold); }
 
