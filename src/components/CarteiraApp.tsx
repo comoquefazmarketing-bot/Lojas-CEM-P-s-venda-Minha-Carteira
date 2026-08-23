@@ -13,7 +13,6 @@ import {
   KanbanSquare, List, Bot, Send, HelpCircle,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { gerarRespostaJarbas, type JarbasContexto } from '@/lib/jarbas';
 import { Cliente, StatusKey, STATUS, STATUS_ORDER, FORMA_PAGAMENTO, Interacao, Lembrete, MetaHistorico, Oferta, VendaHistoricoMensal } from '@/types';
 import {
   type CategoriaProduto, CATEGORIA_LABELS, CATEGORIA_TAXA, CATEGORIA_ORDEM, SALARIO_MINIMO_GARANTIDO,
@@ -768,7 +767,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [viewMode, setViewMode] = useState<'lista' | 'kanban'>('lista');
   const [jarbasOpen, setJarbasOpen] = useState(false);
-  const [jarbasMessages, setJarbasMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [jarbasMessages, setJarbasMessages] = useState<{ role: 'user' | 'assistant'; content: string; acao?: { tipo: string; detalhe: string } }[]>([]);
   const [jarbasInput, setJarbasInput] = useState('');
   const [jarbasLoading, setJarbasLoading] = useState(false);
   const [lembretesDevidos, setLembretesDevidos] = useState<Lembrete[]>([]);
@@ -1460,6 +1459,32 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     loadClients({ silent: true });
   }
 
+  // abre a conversa puxando assunto sozinho na primeira vez que o Felipe usa o Jarbas
+  // (sem histórico nenhum salvo) — em vez de esperar ele digitar a primeira pergunta
+  useEffect(() => {
+    if (!jarbasOpen || jarbasMessages.length > 0 || jarbasLoading) return;
+    (async () => {
+      setJarbasLoading(true);
+      try {
+        const res = await fetch('/api/jarbas', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ abertura: true }),
+        });
+        const data = await res.json().catch(() => null);
+        if (res.ok && data?.reply) {
+          setJarbasMessages([{ role: 'assistant', content: data.reply }]);
+          void supabase.from('jarbas_mensagens').insert({ role: 'assistant', content: data.reply });
+        }
+      } catch {
+        // silencioso — se falhar, só fica o texto de ajuda estático de sempre
+      } finally {
+        setJarbasLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jarbasOpen]);
+
   async function sendJarbasMessage() {
     const texto = jarbasInput.trim();
     if (!texto || jarbasLoading) return;
@@ -1469,46 +1494,25 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     setJarbasLoading(true);
     void supabase.from('jarbas_mensagens').insert({ role: 'user', content: texto });
 
-    const contexto: JarbasContexto = {
-      metaMensal,
-      vendasMes,
-      valorRestante: metaCalc.valorRestante,
-      diasRestantes: metaCalc.diasRestantes,
-      atrasados: stats.atrasados,
-      prospectsAbertos: conversao.aindaProspect,
-      convertidos: conversao.convertidos,
-      taxaConversao: conversao.taxa,
-      cicloMedio: conversao.cicloMedio,
-      prioridadesHoje: acaoDoDia.map(a => ({ nome: a.cliente.nome, motivo: a.motivo })),
-    };
-
-    // Tenta o Jarbas "de verdade" (Gemini + dados reais da carteira, com memória das
-    // conversas anteriores). Se a API não estiver configurada ou falhar, cai pra base
-    // de conhecimento local (sem IA). Manda só as últimas mensagens pro modelo — o
-    // histórico completo fica salvo no banco, mas não precisa virar contexto infinito.
+    // Manda só as últimas mensagens pro modelo (o histórico completo fica salvo no banco
+    // e é recarregado ao abrir o app — não precisa virar contexto infinito a cada chamada).
     try {
-      let usouIA = false;
-      try {
-        const res = await fetch('/api/jarbas', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ messages: historico.slice(-30) }),
-        });
-        const data = await res.json().catch(() => null);
-        if (res.ok && data?.reply) {
-          setJarbasMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
-          void supabase.from('jarbas_mensagens').insert({ role: 'assistant', content: data.reply });
-          usouIA = true;
-        }
-      } catch {
-        // segue pro fallback local abaixo
+      const res = await fetch('/api/jarbas', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ messages: historico.slice(-30) }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.reply) {
+        setJarbasMessages(prev => [...prev, { role: 'assistant', content: data.reply, acao: data.acao }]);
+        void supabase.from('jarbas_mensagens').insert({ role: 'assistant', content: data.reply });
+        if (data.acao?.tipo === 'lembrete') loadLembretesDevidos();
+        if (data.acao?.tipo === 'contato') loadClients({ silent: true });
+      } else {
+        setJarbasMessages(prev => [...prev, { role: 'assistant', content: data?.error || 'Não consegui falar com a IA agora — tenta de novo em instantes.' }]);
       }
-
-      if (!usouIA) {
-        const resposta = gerarRespostaJarbas(texto, contexto);
-        setJarbasMessages(prev => [...prev, { role: 'assistant', content: resposta }]);
-        void supabase.from('jarbas_mensagens').insert({ role: 'assistant', content: resposta });
-      }
+    } catch {
+      setJarbasMessages(prev => [...prev, { role: 'assistant', content: 'Não consegui me conectar com o Jarbas — confere sua internet e tenta de novo.' }]);
     } finally {
       setJarbasLoading(false);
     }
@@ -3463,13 +3467,19 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                     <div className="jarbas-empty">
                       Pergunta sobre: <strong>motivação</strong>, <strong>prioridades de hoje</strong>, sua <strong>meta</strong>,
                       <strong> clientes atrasados</strong>, <strong>taxa de conversão</strong>, <strong>técnicas de fechamento</strong>,
-                      <strong> objeções</strong> ou o método <strong>APONTE</strong>.
+                      <strong> objeções</strong> ou o método <strong>APONTE</strong>. Ele também <strong>age</strong> — pede pra criar um
+                      lembrete ou avisa que já contatou alguém.
                     </div>
                   )}
                   {jarbasMessages.map((m, i) => (
                     <div key={i} className={`jarbas-msg ${m.role}`}>
                       {m.content}
-                      {m.role === 'assistant' && (
+                      {m.role === 'assistant' && m.acao && (
+                        <div className="jarbas-acao-chip">
+                          <Check size={11} /> {m.acao.tipo === 'lembrete' ? 'Lembrete criado' : 'Contato marcado'} — {m.acao.detalhe}
+                        </div>
+                      )}
+                      {m.role === 'assistant' && !m.acao && (
                         salvandoLembreteIdx === i ? (
                           <div className="lembrete-picker">
                             <input
