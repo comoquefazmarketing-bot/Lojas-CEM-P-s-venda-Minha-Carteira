@@ -226,21 +226,32 @@ async function executarFuncao(
 
 /* ------------------------------- Gemini ------------------------------- */
 
-function chamarGemini(systemPrompt: string, contents: unknown[], usarFerramentas = true) {
+function esperar(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// o Gemini às vezes devolve 503 quando o modelo está sobrecarregado do lado do Google —
+// é passageiro e geralmente já resolve numa nova tentativa poucos segundos depois, então
+// tenta de novo em vez de já desistir e mostrar erro pro Felipe
+async function chamarGemini(systemPrompt: string, contents: unknown[], usarFerramentas = true): Promise<Response> {
   const model = 'gemini-flash-latest';
-  return fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents,
-        ...(usarFerramentas ? { tools: TOOLS } : {}),
-        generationConfig: { maxOutputTokens: 2048 },
-      }),
-    }
-  );
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents,
+    ...(usarFerramentas ? { tools: TOOLS } : {}),
+    generationConfig: { maxOutputTokens: 2048 },
+  });
+
+  const esperasEntreTentativas = [0, 700, 1800];
+  let ultimaResposta: Response | null = null;
+  for (const espera of esperasEntreTentativas) {
+    if (espera > 0) await esperar(espera);
+    const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body });
+    if (res.ok || res.status !== 503) return res;
+    ultimaResposta = res;
+  }
+  return ultimaResposta as Response;
 }
 
 export async function POST(request: Request) {
@@ -299,7 +310,9 @@ export async function POST(request: Request) {
       console.error('Jarbas: erro da API do Gemini', res.status, corpoErro);
       return new Response(
         JSON.stringify({
-          error: 'Não consegui falar com o Jarbas agora. Tenta de novo em instantes.',
+          error: res.status === 503
+            ? 'O Gemini (a IA por trás do Jarbas) está sobrecarregado do lado do Google agora — já tentei de novo automaticamente algumas vezes. Espera um pouco e tenta de novo.'
+            : 'Não consegui falar com o Jarbas agora. Tenta de novo em instantes.',
           debug: { geminiStatus: res.status, geminiBody: corpoErro.slice(0, 500) },
         }),
         { status: 502, headers: { 'content-type': 'application/json' } }
