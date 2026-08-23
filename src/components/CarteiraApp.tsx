@@ -276,6 +276,13 @@ type AcaoDoDia = {
   prioridade: number;
 };
 
+/** resumo de contatos feitos (via WhatsApp) com um cliente — contado a partir de cada clique
+ * num script de mensagem, registrado como interação. `recentes` traz os últimos assuntos. */
+type ContatoResumo = {
+  count: number;
+  recentes: { data: string; assunto: string }[];
+};
+
 const emptyForm: Cliente = {
   id: '', nome: '', telefone: '', produto: '', forma_pagamento: 'PARCELADO',
   valor_total: null, valor_sinal: null, valor_parcela: null, numero_parcelas: null,
@@ -365,7 +372,7 @@ function Termometro({ t }: { t: 'quente' | 'morno' | 'frio' }) {
   return <span className="termo termo-frio" title="Esfriando — reative o contato"><Snowflake size={12} /> Frio</span>;
 }
 
-function WaMenu({ c, onClose, anchorRect }: { c: Cliente; onClose: () => void; anchorRect: DOMRect }) {
+function WaMenu({ c, onClose, anchorRect, onEnviar }: { c: Cliente; onClose: () => void; anchorRect: DOMRect; onEnviar: (assunto: string) => void }) {
   useEffect(() => {
     function onDocClick() { onClose(); }
     document.addEventListener('click', onDocClick);
@@ -401,7 +408,7 @@ function WaMenu({ c, onClose, anchorRect }: { c: Cliente; onClose: () => void; a
             href={waLinkWithText(c.telefone, s.build(c.nome, c.produto))}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={onClose}
+            onClick={() => { onEnviar(s.label); onClose(); }}
           >
             <Icon size={14} /> {s.label}
           </a>
@@ -528,6 +535,7 @@ function KanbanCard({
 
 function ClienteCard({
   c, onEdit, onDelete, onMarcarContato, onConverter, indicadorNome, selectionMode, selected, onToggleSelect,
+  contato, onEnviarScript,
 }: {
   c: EnrichedCliente;
   onEdit: (c: Cliente) => void;
@@ -538,6 +546,8 @@ function ClienteCard({
   selectionMode: boolean;
   selected: boolean;
   onToggleSelect: (id: string) => void;
+  contato: ContatoResumo | undefined;
+  onEnviarScript: (clienteId: string, assunto: string) => void;
 }) {
   const s = STATUS[c.status] || STATUS.ATIVO;
   const isProspect = c.status === 'PROSPECT';
@@ -579,6 +589,15 @@ function ClienteCard({
               {indicadorNome && <span className="ref-tag">indicado por {indicadorNome}</span>}
               {c.origem && <span className="ref-tag ref-tag-gold">{c.origem}</span>}
               {c.indicacoesFeitas > 0 && <span className="ref-tag ref-tag-gold"><Handshake size={11} /> {c.indicacoesFeitas} indicação{c.indicacoesFeitas > 1 ? 'ões' : ''}</span>}
+              {contato && contato.count > 0 && (
+                <span className="ref-tag">
+                  <MessageCircle size={11} /> {contato.count}x contatado
+                  <HelpTip
+                    label="Últimos contatos"
+                    text={contato.recentes.map(r => `${formatDateBR(r.data)} — ${r.assunto}`).join('\n')}
+                  />
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -664,7 +683,12 @@ function ClienteCard({
             <div style={{ position: 'relative' }}>
               <button ref={waBtnRef} className="icon-btn wa" title="WhatsApp" aria-label="Abrir menu do WhatsApp" onClick={() => setWaOpen(o => !o)}><MessageCircle size={16} /></button>
               {waOpen && waBtnRef.current && (
-                <WaMenu c={c} onClose={() => setWaOpen(false)} anchorRect={waBtnRef.current.getBoundingClientRect()} />
+                <WaMenu
+                  c={c}
+                  onClose={() => setWaOpen(false)}
+                  anchorRect={waBtnRef.current.getBoundingClientRect()}
+                  onEnviar={assunto => onEnviarScript(c.id, assunto)}
+                />
               )}
             </div>
           </>
@@ -713,6 +737,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
   const [acaoDoDiaOpen, setAcaoDoDiaOpen] = useState(true);
   const [oportunidadesExcluidas, setOportunidadesExcluidas] = useState<Set<string>>(new Set());
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
+  const [interacoesResumo, setInteracoesResumo] = useState<{ cliente_id: string; nota: string; data: string }[]>([]);
   const [novaNota, setNovaNota] = useState('');
   const [metasCategoria, setMetasCategoria] = useState<Record<CategoriaProduto, number | null>>({ MOVEIS: null, TV: null, OUTROS: null });
   const [editingCategoria, setEditingCategoria] = useState<CategoriaProduto | null>(null);
@@ -883,9 +908,10 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
   async function handleDisparoEnviar() {
     const c = disparoClientes[disparoIndex];
     if (!c) return;
+    const script = disparoScriptKey === 'auto' ? scriptAutoPara(c) : (DISPARO_SCRIPT_BY_KEY[disparoScriptKey] || scriptAutoPara(c));
     window.open(waLinkWithText(c.telefone, disparoMsg), '_blank', 'noopener,noreferrer');
     setDisparoEnviados(prev => new Set(prev).add(c.id));
-    await supabase.from('clientes').update({ ultimo_contato: todayIso() }).eq('id', c.id);
+    await handleRegistrarContatoWhatsApp(c.id, script.label);
     setDisparoIndex(i => i + 1);
   }
 
@@ -1231,6 +1257,44 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     setInteracoes((data as Interacao[]) ?? []);
   }
 
+  // resumo leve (todos os clientes, só o essencial) pra mostrar "quantas vezes já contatei"
+  // no card da lista sem precisar abrir cada cliente
+  const loadInteracoesResumo = useCallback(async () => {
+    const { data } = await supabase
+      .from('interacoes')
+      .select('cliente_id, nota, data')
+      .order('data', { ascending: false })
+      .order('criado_em', { ascending: false });
+    setInteracoesResumo(data ?? []);
+  }, [supabase]);
+  useEffect(() => { loadInteracoesResumo(); }, [loadInteracoesResumo]);
+
+  const contatosPorCliente = useMemo(() => {
+    const map = new Map<string, ContatoResumo>();
+    interacoesResumo.forEach(i => {
+      const atual = map.get(i.cliente_id) || { count: 0, recentes: [] };
+      atual.count += 1;
+      if (atual.recentes.length < 3) atual.recentes.push({ data: i.data, assunto: i.nota });
+      map.set(i.cliente_id, atual);
+    });
+    return map;
+  }, [interacoesResumo]);
+
+  /** registra um contato feito por WhatsApp (clique num script de mensagem) como uma
+   * interação — assim dá pra contar quantas vezes e sobre qual assunto já se falou com
+   * cada cliente, sem depender de anotação manual. */
+  async function handleRegistrarContatoWhatsApp(clienteId: string, assunto: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('interacoes').insert({
+      cliente_id: clienteId, user_id: user.id, nota: `WhatsApp: ${assunto}`, data: todayIso(),
+    });
+    await supabase.from('clientes').update({ ultimo_contato: todayIso() }).eq('id', clienteId);
+    loadInteracoesResumo();
+    if (form.id === clienteId) loadInteracoes(clienteId);
+    loadClients({ silent: true });
+  }
+
   function openAdd(status: StatusKey = 'ATIVO') {
     setForm({ ...emptyForm, id: '', status, data_compra: status === 'PROSPECT' ? null : emptyForm.data_compra });
     setOriginalStatus(null);
@@ -1257,6 +1321,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     await supabase.from('clientes').update({ ultimo_contato: todayIso() }).eq('id', form.id);
     setNovaNota('');
     loadInteracoes(form.id);
+    loadInteracoesResumo();
     loadClients({ silent: true });
   }
 
@@ -1264,6 +1329,7 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
     const { error } = await supabase.from('interacoes').delete().eq('id', id);
     if (error) { showToast('Não consegui excluir'); return; }
     setInteracoes(prev => prev.filter(i => i.id !== id));
+    loadInteracoesResumo();
   }
 
   async function confirmarExclusaoGenerica() {
@@ -2365,21 +2431,24 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                       <div className="acao-dia-texto">
                         <strong>{cliente.nome}</strong> — {motivo}
                       </div>
-                      <a
-                        className="mini-btn wa-mini"
-                        href={waLinkWithText(
-                          cliente.telefone,
-                          cliente.origem === 'Indicado pela loja'
-                            ? INDICADO_LOJA_SCRIPTS.parabenizacao.build(cliente.nome, cliente.produto)
-                            : cliente.status === 'PROSPECT'
-                            ? PROSPECT_SCRIPTS.abordagem.build(cliente.nome, cliente.produto)
-                            : SCRIPTS.posvenda.build(cliente.nome, cliente.produto)
-                        )}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <MessageCircle size={12} /> Chamar
-                      </a>
+                      {(() => {
+                        const script = cliente.origem === 'Indicado pela loja'
+                          ? INDICADO_LOJA_SCRIPTS.parabenizacao
+                          : cliente.status === 'PROSPECT'
+                          ? PROSPECT_SCRIPTS.abordagem
+                          : SCRIPTS.posvenda;
+                        return (
+                          <a
+                            className="mini-btn wa-mini"
+                            href={waLinkWithText(cliente.telefone, script.build(cliente.nome, cliente.produto))}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => handleRegistrarContatoWhatsApp(cliente.id, script.label)}
+                          >
+                            <MessageCircle size={12} /> Chamar
+                          </a>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
@@ -2923,6 +2992,8 @@ export default function CarteiraApp({ userEmail, userNome }: { userEmail: string
                   selectionMode={selectionMode}
                   selected={selectedIds.has(c.id)}
                   onToggleSelect={toggleSelected}
+                  contato={contatosPorCliente.get(c.id)}
+                  onEnviarScript={handleRegistrarContatoWhatsApp}
                 />
               ))}
             </div>
