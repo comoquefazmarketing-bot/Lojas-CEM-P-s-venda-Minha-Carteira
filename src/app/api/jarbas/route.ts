@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { Cliente, StatusKey, STATUS } from '@/types';
 import { dentroDoLimite } from '@/lib/rateLimit';
 import { hojeIsoBrasil } from '@/lib/dataBrasil';
+import { normalizeText } from '@/lib/produtos';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +28,14 @@ AS 8 ATITUDES VENCEDORAS (mentalidade que a loja cobra do vendedor):
 6. Nunca desisto
 7. Acredito na força do entusiasmo
 8. Aprendo alguma coisa todo dia
-Quando o Felipe pedir motivação, ou parecer desanimado/inseguro na pergunta, puxe gancho de uma ou duas dessas atitudes (não precisa listar todas de uma vez) em vez de dar uma frase motivacional genérica de internet.`;
+Quando o Felipe pedir motivação, ou parecer desanimado/inseguro na pergunta, puxe gancho de uma ou duas dessas atitudes (não precisa listar todas de uma vez) em vez de dar uma frase motivacional genérica de internet.
+
+VOCÊ TAMBÉM PODE AGIR, NÃO SÓ CONVERSAR — usando as ferramentas disponíveis:
+- criar_lembrete: agenda algo pro Felipe numa data/hora. Use quando ele pedir claramente pra lembrar de algo (ex: "me lembra de ligar pro João amanhã às 10h"), ou quando você sugerir um lembrete e ele topar.
+- marcar_contato_feito: registra que ele acabou de contatar um cliente específico. Use só quando ele disser claramente que já falou/ligou/mandou mensagem pra alguém, citando o nome.
+Só use uma ferramenta quando o pedido for claro — nunca aja por conta própria em algo que ele não pediu ou confirmou. Se o nome do cliente citado for ambíguo (bater com mais de um) ou não existir na lista de clientes, pergunte antes de agir, não tente adivinhar. Você NÃO tem permissão pra excluir clientes, mudar valores, status ou qualquer outro dado — só criar lembretes e marcar contato feito são ações liberadas pra você hoje.
+
+TENHA INICIATIVA: você não é só uma central de respostas — é um parceiro que puxa assunto. Se, respondendo qualquer pergunta, você notar algo urgente e relacionado nos dados (um atrasado que ele não mencionou, a meta apertando, um follow-up vencido), comenta rapidinho no final da resposta, sem que ele precise perguntar por aquilo também.`;
 
 function buildResumo(clientes: Cliente[], metaMensal: number | null): string {
   const hojeIso = hojeIsoBrasil();
@@ -108,6 +116,133 @@ function buildPrioridades(clientes: Cliente[]): string {
   return lista.length > 0 ? lista.slice(0, 8).join('\n') : 'Nenhum cliente com pendência urgente hoje.';
 }
 
+/* ------------------------------- ferramentas (autonomia) ------------------------------- */
+
+const TOOLS = [{
+  functionDeclarations: [
+    {
+      name: 'criar_lembrete',
+      description: 'Cria um lembrete pro Felipe numa data e hora específica, que aparece no app quando chegar a hora. Use quando ele pedir explicitamente pra lembrar de algo, ou quando você sugerir um lembrete e ele topar.',
+      parameters: {
+        type: 'object',
+        properties: {
+          texto: { type: 'string', description: 'O que lembrar — texto curto e direto (ex: "Ligar pro João sobre a geladeira").' },
+          data_hora_iso: { type: 'string', description: 'Data e hora em ISO 8601 com fuso de Brasília (ex: 2026-08-20T10:00:00-03:00). Se o Felipe não disser a hora exata, use 09:00.' },
+        },
+        required: ['texto', 'data_hora_iso'],
+      },
+    },
+    {
+      name: 'marcar_contato_feito',
+      description: 'Marca que o Felipe acabou de contatar um cliente específico da carteira — atualiza o último contato e limpa qualquer follow-up pendente marcado pra ele. Use só quando ele disser claramente que já falou/ligou/mandou mensagem pra alguém, citando o nome.',
+      parameters: {
+        type: 'object',
+        properties: {
+          nome_cliente: { type: 'string', description: 'Nome do cliente, o mais parecido possível com o que está na lista da carteira.' },
+        },
+        required: ['nome_cliente'],
+      },
+    },
+  ],
+}];
+
+type ResolucaoCliente =
+  | { status: 'ok'; cliente: Cliente }
+  | { status: 'ambiguo'; nomes: string[] }
+  | { status: 'nao_encontrado' };
+
+function resolverCliente(nomeBusca: string, clientes: Cliente[]): ResolucaoCliente {
+  const alvo = normalizeText(nomeBusca.trim());
+  if (!alvo) return { status: 'nao_encontrado' };
+
+  const exatos = clientes.filter(c => normalizeText(c.nome) === alvo);
+  if (exatos.length === 1) return { status: 'ok', cliente: exatos[0] };
+  if (exatos.length > 1) return { status: 'ambiguo', nomes: exatos.map(c => c.nome) };
+
+  const parciais = clientes.filter(c => {
+    const nome = normalizeText(c.nome);
+    return nome.includes(alvo) || alvo.includes(nome);
+  });
+  if (parciais.length === 1) return { status: 'ok', cliente: parciais[0] };
+  if (parciais.length > 1) return { status: 'ambiguo', nomes: parciais.map(c => c.nome) };
+
+  return { status: 'nao_encontrado' };
+}
+
+type ResultadoAcao = {
+  ok: boolean;
+  mensagemParaIA: string;
+  acao?: { tipo: string; detalhe: string };
+};
+
+async function executarFuncao(
+  nome: string,
+  args: Record<string, unknown>,
+  ctx: { supabase: Awaited<ReturnType<typeof createClient>>; clientes: Cliente[] }
+): Promise<ResultadoAcao> {
+  const { supabase, clientes } = ctx;
+
+  if (nome === 'criar_lembrete') {
+    const texto = typeof args.texto === 'string' ? args.texto.trim() : '';
+    const dataHoraIso = typeof args.data_hora_iso === 'string' ? args.data_hora_iso : '';
+    const dataHora = new Date(dataHoraIso);
+    if (!texto || Number.isNaN(dataHora.getTime())) {
+      return { ok: false, mensagemParaIA: 'Não consegui criar o lembrete — faltou o texto ou a data/hora não é válida. Pergunta os detalhes de novo.' };
+    }
+    const { error } = await supabase.from('lembretes').insert({ texto, data_hora: dataHora.toISOString() });
+    if (error) return { ok: false, mensagemParaIA: 'Deu erro ao tentar salvar o lembrete.' };
+    const dataFormatada = dataHora.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    return {
+      ok: true,
+      mensagemParaIA: `Lembrete criado: "${texto}" pra ${dataFormatada}.`,
+      acao: { tipo: 'lembrete', detalhe: `${texto} — ${dataFormatada}` },
+    };
+  }
+
+  if (nome === 'marcar_contato_feito') {
+    const nomeCliente = typeof args.nome_cliente === 'string' ? args.nome_cliente : '';
+    const resolvido = resolverCliente(nomeCliente, clientes);
+    if (resolvido.status === 'nao_encontrado') {
+      return { ok: false, mensagemParaIA: `Não achei nenhum cliente chamado "${nomeCliente}" na carteira. Confirma o nome certo.` };
+    }
+    if (resolvido.status === 'ambiguo') {
+      return { ok: false, mensagemParaIA: `Tem mais de um cliente parecido com "${nomeCliente}": ${resolvido.nomes.join(', ')}. Pergunta qual dos dois é.` };
+    }
+    const { cliente } = resolvido;
+    const { error } = await supabase
+      .from('clientes')
+      .update({ ultimo_contato: hojeIsoBrasil(), proximo_contato: null })
+      .eq('id', cliente.id);
+    if (error) return { ok: false, mensagemParaIA: `Deu erro ao tentar atualizar o contato de ${cliente.nome}.` };
+    return {
+      ok: true,
+      mensagemParaIA: `Contato com ${cliente.nome} marcado como feito hoje.`,
+      acao: { tipo: 'contato', detalhe: cliente.nome },
+    };
+  }
+
+  return { ok: false, mensagemParaIA: `Não reconheço a ação "${nome}".` };
+}
+
+/* ------------------------------- Gemini ------------------------------- */
+
+function chamarGemini(systemPrompt: string, contents: unknown[], usarFerramentas = true) {
+  const model = 'gemini-flash-latest';
+  return fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents,
+        ...(usarFerramentas ? { tools: TOOLS } : {}),
+        generationConfig: { maxOutputTokens: 2048 },
+      }),
+    }
+  );
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -131,8 +266,9 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => null);
+  const ehAbertura = body?.abertura === true;
   const messages = Array.isArray(body?.messages) ? body.messages : [];
-  if (messages.length === 0) return new Response('Mensagem vazia', { status: 400 });
+  if (!ehAbertura && messages.length === 0) return new Response('Mensagem vazia', { status: 400 });
 
   const [{ data: clientesData }, { data: configData }] = await Promise.all([
     supabase.from('clientes').select('*'),
@@ -145,23 +281,18 @@ export async function POST(request: Request) {
 
   const systemPrompt = `${SISTEMA_PROMPT_BASE}\n\nRESUMO DA CARTEIRA HOJE:\n${resumo}\n\nQUEM PRECISA DE ATENÇÃO HOJE:\n${prioridades}\n\nLISTA COMPLETA DE CLIENTES:\n${clientesDetalhado}`;
 
+  const contents = ehAbertura
+    ? [{
+        role: 'user',
+        parts: [{ text: 'Abre a conversa puxando assunto sozinho, sem esperar eu perguntar nada — uma saudação curta (1-2 frases) que já comente algo específico e relevante do resumo de hoje (meta, prioridade urgente, etc.). Não use nenhuma ferramenta agora, só fala.' }],
+      }]
+    : messages.map((m: { role: string; content: string }) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      }));
+
   try {
-    const model = 'gemini-flash-latest';
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents: messages.map((m: { role: string; content: string }) => ({
-            role: m.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: m.content }],
-          })),
-          generationConfig: { maxOutputTokens: 2048 },
-        }),
-      }
-    );
+    const res = await chamarGemini(systemPrompt, contents, !ehAbertura);
 
     if (!res.ok) {
       const corpoErro = await res.text().catch(() => '');
@@ -176,7 +307,45 @@ export async function POST(request: Request) {
     }
 
     const data = await res.json();
-    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Não consegui pensar em uma resposta agora.';
+    const parts: Array<{ text?: string; functionCall?: { name: string; args?: Record<string, unknown> } }> =
+      data?.candidates?.[0]?.content?.parts ?? [];
+    const chamada = parts.find(p => p.functionCall)?.functionCall;
+
+    if (chamada) {
+      const resultado = await executarFuncao(chamada.name, chamada.args ?? {}, { supabase, clientes });
+
+      // manda a resposta da função de volta pro modelo pra ele confirmar com a própria
+      // voz — se essa segunda chamada falhar por qualquer razão, a ação já foi executada
+      // de qualquer forma, então cai numa confirmação pronta em vez de falhar silenciosamente
+      try {
+        const contentsComFuncao = [
+          ...contents,
+          { role: 'model', parts: [{ functionCall: { name: chamada.name, args: chamada.args ?? {} } }] },
+          { role: 'function', parts: [{ functionResponse: { name: chamada.name, response: { resultado: resultado.mensagemParaIA } } }] },
+        ];
+        const res2 = await chamarGemini(systemPrompt, contentsComFuncao);
+        if (res2.ok) {
+          const data2 = await res2.json();
+          const parts2: Array<{ text?: string }> = data2?.candidates?.[0]?.content?.parts ?? [];
+          const reply2 = parts2.find(p => p.text)?.text;
+          if (reply2) {
+            return new Response(
+              JSON.stringify({ reply: reply2, acao: resultado.ok ? resultado.acao : undefined }),
+              { status: 200, headers: { 'content-type': 'application/json' } }
+            );
+          }
+        }
+      } catch {
+        // segue pro fallback abaixo
+      }
+
+      return new Response(
+        JSON.stringify({ reply: resultado.mensagemParaIA, acao: resultado.ok ? resultado.acao : undefined }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    }
+
+    const reply = parts.find(p => p.text)?.text ?? 'Não consegui pensar em uma resposta agora.';
     return new Response(JSON.stringify({ reply }), { status: 200, headers: { 'content-type': 'application/json' } });
   } catch {
     return new Response(JSON.stringify({ error: 'Não consegui me conectar com o Jarbas.' }), {
