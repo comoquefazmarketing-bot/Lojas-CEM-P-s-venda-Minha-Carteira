@@ -5,6 +5,10 @@ import { hojeIsoBrasil } from '@/lib/dataBrasil';
 import { normalizeText } from '@/lib/produtos';
 
 export const dynamic = 'force-dynamic';
+// com a carteira grande (200+ clientes), o prompt fica pesado e o Gemini demora mais pra
+// responder — sem isso, o limite padrão da função no Vercel mata a requisição no meio do
+// caminho e o app mostra "não consegui me conectar", mesmo com a internet normal
+export const maxDuration = 60;
 
 const SISTEMA_PROMPT_BASE = `Você é o Jarbas, assistente pessoal de vendas do Felipe, vendedor das Lojas CEM (móveis e eletrodomésticos, com pós-venda por carnê). Seu estilo é direto, estratégico e motivador — um parceiro de confiança, não um robô formal. Responda sempre em português do Brasil, em respostas curtas (no máximo 3-4 parágrafos curtos, ou uma lista objetiva quando fizer sentido) e SEMPRE termine o raciocínio — nunca corte uma frase pela metade. Escreva em texto puro, sem formatação markdown (sem **negrito**, sem #, sem colchetes) — a tela exibe exatamente o texto que você mandar. Você recebe abaixo o resumo da carteira E a lista completa de cada cliente com seus dados — use a lista completa pra responder perguntas específicas (quem comprou tal produto, qual o maior valor, quando foi a compra, etc.), fazendo você mesmo a busca/comparação/ranking necessário. Baseie suas respostas de dados SOMENTE nas informações fornecidas abaixo — nunca invente números, nomes ou situações que não estejam nos dados. Se não souber algo porque não está nos dados, diga isso.
 
@@ -243,7 +247,7 @@ async function chamarGemini(systemPrompt: string, contents: unknown[], usarFerra
     generationConfig: { maxOutputTokens: 2048 },
   });
 
-  const esperasEntreTentativas = [0, 700, 1800];
+  const esperasEntreTentativas = [0, 400, 1000];
   let ultimaResposta: Response | null = null;
   for (const espera of esperasEntreTentativas) {
     if (espera > 0) await esperar(espera);
